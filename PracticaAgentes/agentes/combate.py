@@ -3,22 +3,13 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from dados import tirardados
+import json
 
-def combate(accion):
+def combate(accion, dic):
     load_dotenv()
     llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
     #messages = []
-    '''    jugador = {
-        "Vida": 100,
-        "Ataque": 20,
-        "AC": 12
-    }
 
-    enemigo = {
-        "Vida": 80,
-        "Ataque": 15,
-        "AC": 10
-}'''
 
     decision = llm.invoke([
         SystemMessage(content=f"Si el usuario escribe cualquier acción relacionada con atacar, guarda en la variable decision la palabra 'ATACAR'. Si el usuario escribe cualquier accion relacionada con huir, guarda en la variable decision la palabra 'HUIR'"),

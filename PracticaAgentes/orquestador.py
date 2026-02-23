@@ -3,11 +3,14 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from agentes.combate import combate
+import json
 
 # Funciona como un orquestador lógico programado por mí para que siempre llame al narrador
 def main():
     load_dotenv()
     llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
+    with open('stats.json', 'r', encoding= 'utf-8') as f:
+        datos = json.load(f)
     messages = [
         
     ]
@@ -32,7 +35,7 @@ def main():
 
                 while EnCombate == 1:
                     accion = input("Qué acción quieres realizar? (atacar o huir)")
-                    resultado, valor = combate(accion)
+                    resultado, valor = combate(accion, datos)
                     #messages.append(HumanMessage(content=combate(accion))) # Guardamos la información del combate para que el narrador pueda procesarla y generar un resumen coherente
                     finalizado = llm.invoke([
                         SystemMessage(content=f"Si el combate ha terminado, guarda la palabra 'FINALIZADO' en la variable finalizado"),
