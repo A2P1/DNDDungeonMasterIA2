@@ -43,7 +43,7 @@ def main():
                     ]).content
                     if "FINALIZADO" in finalizado.upper():
                         comentario = llm.invoke([
-                            SystemMessage(content=f"el jugador ha sacado un {valor} al tirar los dados en un D&D. Narra esto de forma épica en 1 frase mostrando el valor del dado teniendo en cuenta este resultado: {resultado} y guardalo en la variable 'comentario'")
+                            SystemMessage(content=f"el jugador ha sacado un {valor} al tirar los dados en un D&D. Si es mayor a 12 ha acertado, si no, ha fracasado. Narra esto de forma genérica en 1 frase mostrando el valor del dado teniendo en cuenta este resultado: {resultado} y guardalo en la variable 'comentario'")
                         ])
                         print(comentario.content)
                         EnCombate = 0
