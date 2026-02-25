@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from dados import tirardados
 import json
 
+#tools = [combate(accion, datos)]
 def combate(accion, datos):
     load_dotenv()
     llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
