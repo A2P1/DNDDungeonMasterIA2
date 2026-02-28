@@ -1,32 +1,19 @@
-from agentes.HolaMundoLangchain import narrador, narrador_inicio # Importamos la función narrador del archivo HolaMundoLangchain.py para poder utilizarla en el orquestador
+from agentes.HolaMundoLangchain import narrador, narrador_inicio
 from dotenv import load_dotenv
-from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from agentes.combate import combate
+from tools.stats import get_status
+from tools.combate import llamar_combate
+from config import STATS_PATH, RESUMEN_PATH
 import json
 
-@tool
-def get_status():
-    '''
-Útil para cuando el usuario pregunte por sus estadísticas de salud (vida), defensa o ataque. Devuelve el estado actual del personaje en formato JSON.
-    '''
-    with open('stats.json', 'r', encoding="utf-8") as f:
-        return f.read()
-# Funciona como un orquestador lógico programado por mí para que siempre llame al narrador
 
-@tool
-def llamar_combate():
-    """Úsala cuando el usuario quiera atacar, pelear o iniciar un enfrentamiento."""
-    return "SEÑAL_INICIAR_COMBATE"
-
-
-    
 
 def main():
     load_dotenv()
     llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
-    with open('stats.json', 'r', encoding= 'utf-8') as f:
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
         datos = json.load(f)
     messages = [
         
@@ -38,7 +25,7 @@ def main():
 
 
     while True:
-        with open('resumen.txt', 'r', encoding='utf-8') as f:
+        with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
             resumen = f.read().strip() # Cargamos el resumen de la partida para pasársela al narrador
         if resumen:
             
@@ -75,8 +62,6 @@ def main():
                         # DE AQUÍ
 
                         # 3. Le pasamos el resultado a la IA para que lo procese
-                        from langchain_core.messages import ToolMessage
-                        
                         # Es vital pasarle el ID para que la IA sepa a qué petición responde
                         mensaje_herramienta = ToolMessage(
                             content=str(respuesta_herramienta), 

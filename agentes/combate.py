@@ -1,8 +1,11 @@
-import os
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from dados import tirardados
+from config import STATS_PATH
 import json
 
 #tools = [combate(accion, datos)]
@@ -26,7 +29,7 @@ def combate(accion, datos):
             print("mala")
             #jugador["Vida"] -= enemigo["Ataque"]
             datos["vida"] -= 10
-            with open('stats.json', 'w', encoding='utf-8') as f:
+            with open(STATS_PATH, 'w', encoding='utf-8') as f:
                 json.dump(datos, f)
             print(datos["vida"])
             return "Combate perdido", str(resultado_dado)

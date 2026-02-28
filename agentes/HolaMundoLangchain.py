@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -8,7 +7,12 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
     HumanMessage: Lo que el usuario le dice a la IA, es decir, las acciones que quiere realizar en la partida.
     AIMessage: Lo que la IA responde al usuario, es decir, lo que ocurre en la partida.
 '''
-with open('Narradorprompt.txt', 'r', encoding='utf-8') as f:
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import NARRADOR_PROMPT_PATH, RESUMEN_PATH
+
+with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
         system_prompt = f.read().strip()
 
 load_dotenv()
@@ -39,7 +43,7 @@ def narrador(resumen, user_input):
             HumanMessage(content=f"Resumen de la historia: {respuesta.content}") # Le pasamos esta info como HumanMessage porque es esa misma info la que tiene que resumir
         ]).content.strip()
 
-        with open('resumen.txt', 'a', encoding='utf-8') as f:
+        with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
             f.write(resumen + "\n")
         return respuesta.content'''
     # Guardamos la información del usuario
@@ -52,7 +56,7 @@ def narrador(resumen, user_input):
         SystemMessage(content=f"Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
         HumanMessage(content=f"Resumen anterior: {resumen} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
     ]).content.strip()
-    with open('resumen.txt', 'a', encoding='utf-8') as f:
+    with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
         f.write(resumen + "\n")
     return respuesta.content
 
@@ -70,7 +74,7 @@ def narrador_inicio():
         HumanMessage(content=f"Resumen de la historia: {respuesta.content}") # Le pasamos esta info como HumanMessage porque es esa misma info la que tiene que resumir
     ]).content.strip()
 
-    with open('resumen.txt', 'a', encoding='utf-8') as f:
+    with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
         f.write(resumen + "\n")
     return respuesta.content   
 #narrador()
