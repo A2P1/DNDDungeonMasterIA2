@@ -1,0 +1,4 @@
+# Dependencias directas del proyecto
+langchain-openai==1.1.9
+langchain-core==1.2.13
+python-dotenv==1.2.1
