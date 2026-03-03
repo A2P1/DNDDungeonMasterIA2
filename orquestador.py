@@ -4,7 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from agentes.combate import combate
 from tools.stats import get_status
-from tools.combate import llamar_combate
+from tools.tool_combate import llamar_combate
 from config import STATS_PATH, RESUMEN_PATH
 import json
 
@@ -19,11 +19,7 @@ def main():
         
     ]
     EnCombate = 0
-    llm_tools = llm.bind_tools([get_status, llamar_combate])
-    Herramientas = [get_status, llamar_combate]
-    mapa_herramientas = {t.name: t for t in Herramientas}
-
-
+    
     while True:
         with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
             resumen = f.read().strip() # Cargamos el resumen de la partida para pasársela al narrador
