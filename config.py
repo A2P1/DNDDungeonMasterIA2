@@ -7,6 +7,7 @@ ROOT = Path(__file__).parent
 STATS_PATH = ROOT / "data" / "stats.json"
 RESUMEN_PATH = ROOT / "data" / "resumen.txt"
 NARRADOR_PROMPT_PATH = ROOT / "prompts" / "narrador.txt"
+COMBATE_PROMPT_PATH = ROOT / "prompts" / "combate.txt"
 
 # Configuración del modelo
 MODEL_NAME = "gpt-4o"

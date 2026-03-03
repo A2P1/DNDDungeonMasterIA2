@@ -28,8 +28,7 @@ llm_tools = llm.bind_tools([get_status, mostrar_resumen])
 Herramientas = [get_status, mostrar_resumen]
 mapa_herramientas = {t.name: t for t in Herramientas}
 
-load_dotenv()
-llm = ChatOpenAI(model="gpt-4o", temperature=TEMPERATURE_NARRADOR)
+
 messages = [
         SystemMessage(content=system_prompt)
 ]

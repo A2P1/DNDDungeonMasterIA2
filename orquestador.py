@@ -18,7 +18,9 @@ def main():
     messages = [
         
     ]
-    EnCombate = 0
+    llm_tools = llm.bind_tools([llamar_combate])
+    Herramientas = [llamar_combate]
+    mapa_herramientas = {t.name: t for t in Herramientas}
     
     while True:
         with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
@@ -26,7 +28,7 @@ def main():
         if resumen:
             user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
             #respuesta = llm_tools.invoke(user_input) 
-
+        
             '''if respuesta.tool_calls:
                     for tool_call in respuesta.tool_calls:
                         # Buscamos la función en nuestro mapa y la ejecutamos
