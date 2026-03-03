@@ -1,4 +1,4 @@
-from agentes.HolaMundoLangchain import narrador, narrador_inicio
+from agentes.Narrador import narrador, narrador_inicio
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
@@ -28,11 +28,10 @@ def main():
         with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
             resumen = f.read().strip() # Cargamos el resumen de la partida para pasársela al narrador
         if resumen:
-            
             user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
-            respuesta = llm_tools.invoke(user_input) 
+            #respuesta = llm_tools.invoke(user_input) 
 
-            if respuesta.tool_calls:
+            '''if respuesta.tool_calls:
                     for tool_call in respuesta.tool_calls:
                         # Buscamos la función en nuestro mapa y la ejecutamos
                         seleccionada = mapa_herramientas[tool_call["name"]]
@@ -57,8 +56,8 @@ def main():
                                     ])
                                 print(comentario.content)
                                 EnCombate = 0
-                        '''else:
-                            respuesta_herramienta = resultado_validacion'''
+                        else:
+                            respuesta_herramienta = resultado_validacion
                         # DE AQUÍ
 
                         # 3. Le pasamos el resultado a la IA para que lo procese
@@ -77,8 +76,8 @@ def main():
                         print(respuesta_final.content)
                         # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
 
-            else:
-                if user_input.lower() == "salir":
+            '''
+            if user_input.lower() == "salir":
                     break
                     ''' else:
                     messages.append(HumanMessage(content=user_input)) # Guardamos la info que ha introducido el usuario para procesarla
@@ -106,8 +105,8 @@ def main():
                                 EnCombate = 0
 
                 '''
-                else:
-                    print(narrador(resumen, user_input)) # Hacemos la llamada al narrador pasándole el resumen y la información introducida por el usuario
+            else:
+                    print(narrador(user_input)) # Hacemos la llamada al narrador pasándole el resumen y la información introducida por el usuario
         else:
             print(narrador_inicio())
 main()
