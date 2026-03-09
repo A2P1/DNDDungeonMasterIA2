@@ -27,8 +27,26 @@ def main():
             resumen = f.read().strip() # Cargamos el resumen de la partida para pasársela al narrador
         if resumen:
             user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
-            #respuesta = llm_tools.invoke(user_input) 
+            respuesta = llm_tools.invoke(user_input) 
         
+        if respuesta.tool_calls:
+            for tool_call in respuesta.tool_calls:
+                # Buscamos la función en nuestro mapa y la ejecutamos
+                seleccionada = mapa_herramientas[tool_call["name"]]
+                respuesta_herramienta = seleccionada.invoke(tool_call["args"])
+                mensaje_herramienta = ToolMessage(
+                    content=str(respuesta_herramienta), 
+                    tool_call_id=tool_call["id"]
+                )
+                # 4. Invocación final: La IA ahora sí tiene los datos para hablar
+                respuesta_final = llm_tools.invoke([
+                    HumanMessage(content=user_input),
+                    respuesta, # La petición original
+                    mensaje_herramienta # La respuesta de la función
+                ])
+                            
+                print(respuesta_final.content)
+                # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
             '''if respuesta.tool_calls:
                     for tool_call in respuesta.tool_calls:
                         # Buscamos la función en nuestro mapa y la ejecutamos

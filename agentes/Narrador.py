@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from tools.stats import get_status
 from tools.resumen import mostrar_resumen
+from tools.dados import d4, d8, d20
 from config import STATS_PATH
 
 '''
@@ -24,8 +25,8 @@ llm = ChatOpenAI(model="gpt-4o", temperature=TEMPERATURE_NARRADOR) # Cargamos el
 with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
         system_prompt = f.read().strip()
 
-llm_tools = llm.bind_tools([get_status, mostrar_resumen])
-Herramientas = [get_status, mostrar_resumen]
+llm_tools = llm.bind_tools([get_status, mostrar_resumen, d4, d8, d20])
+Herramientas = [get_status, mostrar_resumen, d4, d8, d20]
 mapa_herramientas = {t.name: t for t in Herramientas}
 
 
