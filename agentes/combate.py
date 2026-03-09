@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from tools.dados import d4, d8, d20
-from config import STATS_PATH, COMBATE_PROMPT_PATH
+from config import STATS_PATH, COMBATE_PROMPT_PATH, RESUMEN_PATH
 import json
+from tools.comprobar_enemigo import comprobar_enemigo
 
 load_dotenv()
 llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
@@ -16,34 +17,37 @@ mapa_herramientas = {t.name: t for t in Herramientas}
 
 #tools = [combate(accion, datos)]
 def combate():
-    with open(COMBATE_PROMPT_PATH, 'r', encoding='utf-8') as f:
-        system_prompt = f.read().strip()
+    if comprobar_enemigo.invoke({}) == True:     
+        '''with open(COMBATE_PROMPT_PATH, 'r', encoding='utf-8') as f:
+        system_prompt = f.read().strip()'''
 
-    #messages = []
-    with open(STATS_PATH, 'r', encoding='utf-8') as f:
-        datos = json.load(f)
-    combate_finalizado = False
-    while not combate_finalizado:
-        accion = input("Qué acción quieres realizar? (atacar o huir)")
-        mensajes = [HumanMessage(content=accion)]
-        while True:
-
-            respuesta = llm_tools.invoke(mensajes)
-            mensajes.append(respuesta)
-            if not respuesta.tool_calls:
-                print(respuesta.content)
-                break
-            for tool_call in respuesta.tool_calls:
-                    nombre = tool_call["name"]
-                    args = tool_call["args"]
-                # Buscamos la función en nuestro mapa y la ejecutamos
-                    seleccionada = mapa_herramientas[nombre]
-                    respuesta_herramienta = seleccionada.invoke(args)
-
-                    mensajes.append(ToolMessage(
-                         content=str(respuesta_herramienta), 
-                         tool_call_id=tool_call["id"]
-                    ))
+        #messages = []
+        with open(STATS_PATH, 'r', encoding='utf-8') as f:
+            datos = json.load(f)
+        combate_finalizado = False
+        while not combate_finalizado:
+            accion = input("Qué acción quieres realizar? (atacar o huir)")
+            respuesta = llm_tools.invoke(accion) 
+                
+            if respuesta.tool_calls:
+                    
+                    for tool_call in respuesta.tool_calls:
+                        # Buscamos la función en nuestro mapa y la ejecutamos
+                        seleccionada = mapa_herramientas[tool_call["name"]]
+                        respuesta_herramienta = seleccionada.invoke(tool_call["args"])
+                        mensaje_herramienta = ToolMessage(
+                            content=str(respuesta_herramienta), 
+                            tool_call_id=tool_call["id"]
+                        )
+                        # 4. Invocación final: La IA ahora sí tiene los datos para hablar
+                        respuesta_final = llm_tools.invoke([
+                            HumanMessage(content=accion),
+                            respuesta, # La petición original
+                            mensaje_herramienta # La respuesta de la función
+                        ])
+                                    
+                        print(respuesta_final.content)
+                        # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
 '''                    mensaje_herramienta = ToolMessage(
                         content=str(respuesta_herramienta), 
                         tool_call_id=tool_call["id"]
