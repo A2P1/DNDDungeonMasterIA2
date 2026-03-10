@@ -46,6 +46,7 @@ def narrador(user_input):
             )
             # 4. Invocación final: La IA ahora sí tiene los datos para hablar
             respuesta_final = llm_tools.invoke([
+                 SystemMessage(content=system_prompt), # Le decimos a la IA que no es la primera vez que interactúa en la partida
                 HumanMessage(content=user_input),
                 respuesta, # La petición original
                 mensaje_herramienta # La respuesta de la función
