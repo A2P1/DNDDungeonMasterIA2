@@ -11,6 +11,7 @@ def dados_ataque(tipodado: int):
 
     Si 'resultado_dado' es mayor a 10, en el return devuelve el resultado como el daño que se le ha infligido al enemigo
     Si 'resultado_dado' es menor o igual a 10, en el return devuelve el resultado como un fallo en el ataque
+    
     """
     print(tipodado)
     resultado_dado = dados_situacion.invoke({})
@@ -20,16 +21,18 @@ def dados_ataque(tipodado: int):
     return resultado_dado
 
 @tool
-def dados_situacion():
+def dados_situacion(dificultad: int):
     """
     Ejecuta esta función para tirar dados en situaciones en las que el jugador deba superar un obstáculo o desafío que no sea un combate directo, como por ejemplo saltar algo, caminar sigilosamente, correr muchísimo, etc
-    Si 'resultado' es mayor a 10, en el return devuelve el resultado como un éxito del obsáculo o desafío realizado por el jugador
-    Si 'resultado' es menor o igual a 10, en el return devuelve el resultado como un fracaso del obsáculo o desafío realizado por el jugador
+    La dificultad dependerá de la complejidad del obstáculo o desafío al que el jugador está expuesto, pero el baremo por lo general irá desde 5 a 15
+    Si 'resultado' es mayor a la dificultad establecida, en el return devuelve el resultado como un éxito del obsáculo o desafío realizado por el jugador
+    Si 'resultado' es menor o igual a la dificultad establecida, en el return devuelve el resultado como un fracaso del obsáculo o desafío realizado por el jugador
     """
     
     resultado = random.randint(1, 20)
+    print(dificultad)
     print(resultado)
-    if resultado > 10:
+    if resultado > dificultad:
         return resultado
     return resultado
 
