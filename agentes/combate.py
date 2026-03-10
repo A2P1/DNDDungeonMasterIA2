@@ -4,19 +4,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from tools.dados import d4, d8, d20
+from tools.dados import dados_ataque
 from config import STATS_PATH, COMBATE_PROMPT_PATH, RESUMEN_PATH
 import json
 from tools.comprobar_enemigo import comprobar_enemigo
 
 load_dotenv()
 llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
-llm_tools = llm.bind_tools([d4, d8, d20])
-Herramientas = [d4, d8, d20]
+llm_tools = llm.bind_tools([dados_ataque])
+Herramientas = [dados_ataque]
 mapa_herramientas = {t.name: t for t in Herramientas}
 
 #tools = [combate(accion, datos)]
 def combate():
+    print("-")
     if comprobar_enemigo.invoke({}) == True:     
         '''with open(COMBATE_PROMPT_PATH, 'r', encoding='utf-8') as f:
         system_prompt = f.read().strip()'''
@@ -28,9 +29,10 @@ def combate():
         while not combate_finalizado:
             accion = input("Qué acción quieres realizar? (atacar o huir)")
             respuesta = llm_tools.invoke(accion) 
+            print("-")
                 
             if respuesta.tool_calls:
-                    
+                    print("-")
                     for tool_call in respuesta.tool_calls:
                         # Buscamos la función en nuestro mapa y la ejecutamos
                         seleccionada = mapa_herramientas[tool_call["name"]]
@@ -41,6 +43,7 @@ def combate():
                         )
                         # 4. Invocación final: La IA ahora sí tiene los datos para hablar
                         respuesta_final = llm_tools.invoke([
+                            SystemMessage(content="Narrador de D&D. Describe el resultado de los dados. NUNCA ofrezcas ayuda ni salgas del rol. Sé breve y visceral."),
                             HumanMessage(content=accion),
                             respuesta, # La petición original
                             mensaje_herramienta # La respuesta de la función
