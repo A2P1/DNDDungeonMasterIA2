@@ -34,7 +34,7 @@ messages = [
         SystemMessage(content=system_prompt)
 ]
 def narrador(user_input):
-    respuesta = llm_tools.invoke(user_input)
+    respuesta = llm_tools.invoke(messages + [HumanMessage(content=user_input)])
     if respuesta.tool_calls:
         for tool_call in respuesta.tool_calls:
             # Buscamos la función en nuestro mapa y la ejecutamos
