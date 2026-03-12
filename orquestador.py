@@ -36,6 +36,11 @@ def main():
                     # Buscamos la función en nuestro mapa y la ejecutamos
                     seleccionada = mapa_herramientas[tool_call["name"]]
                     respuesta_herramienta = seleccionada.invoke(tool_call["args"])
+                    if tool_call["name"] == "llamar_combate":
+                        if "no hay enemigos" in respuesta_herramienta.lower():
+                            print(respuesta_herramienta)
+                            continue
+                        
                     mensaje_herramienta = ToolMessage(
                         content=str(respuesta_herramienta), 
                         tool_call_id=tool_call["id"]
@@ -95,7 +100,8 @@ def main():
                             # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
 
                 '''
-            if user_input.lower() == "salir":
+            else:
+                if user_input.lower() == "salir":
                         break
                         ''' else:
                         messages.append(HumanMessage(content=user_input)) # Guardamos la info que ha introducido el usuario para procesarla
@@ -123,9 +129,9 @@ def main():
                                     EnCombate = 0
 
                     '''
-            else:
-                print("HOLA3")
-                print(narrador(user_input)) # Hacemos la llamada al narrador pasándole el resumen y la información introducida por el usuario
+                else:
+                    print("HOLA3")
+                    print(narrador(user_input)) # Hacemos la llamada al narrador pasándole el resumen y la información introducida por el usuario'''
 
         else:
             print(narrador_inicio())
