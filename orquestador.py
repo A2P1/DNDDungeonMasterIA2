@@ -1,4 +1,5 @@
 from agentes.Narrador import narrador, narrador_inicio
+from agentes.director import generar_campaña, campaña_existe, cargar_campaña
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
@@ -9,22 +10,40 @@ from config import STATS_PATH, RESUMEN_PATH
 import json
 
 
+def iniciar_campaña():
+    """Si no existe campaña, pregunta al jugador y genera una."""
+    if campaña_existe():
+        print("Campaña existente encontrada. Continuando...\n")
+        return cargar_campaña()
+
+    print("=== CREACIÓN DE CAMPAÑA ===\n")
+    tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
+    personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
+
+    print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
+    campaña = generar_campaña(tema, personaje)
+    print(f"¡Campaña '{campaña['titulo']}' creada!\n")
+    print(f"Gancho: {campaña['gancho']}\n")
+    return campaña
+
 
 def main():
     load_dotenv()
     llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
     with open(STATS_PATH, 'r', encoding='utf-8') as f:
         datos = json.load(f)
-    messages = [
-        
-    ]
+
+    # Generar o cargar la campaña antes de empezar
+    campaña = iniciar_campaña()
+
+    messages = []
     llm_tools = llm.bind_tools([llamar_combate])
     Herramientas = [llamar_combate]
     mapa_herramientas = {t.name: t for t in Herramientas}
-    
+
     while True:
         with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
-            resumen = f.read().strip() # Cargamos el resumen de la partida para pasársela al narrador
+            resumen = f.read().strip()
         if resumen:
             user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
             print("HOLA1")

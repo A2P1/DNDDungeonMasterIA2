@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Tool
 from tools.stats import get_status
 from tools.resumen import mostrar_resumen
 from tools.dados import dados_situacion
+from tools.campana import get_progreso_campaña, get_siguiente_beat, marcar_beat_completado, get_info_npc
 from config import STATS_PATH
 
 '''
@@ -25,8 +26,8 @@ llm = ChatOpenAI(model="gpt-4o", temperature=TEMPERATURE_NARRADOR) # Cargamos el
 with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
         system_prompt = f.read().strip()
 
-llm_tools = llm.bind_tools([get_status, mostrar_resumen, dados_situacion])
-Herramientas = [get_status, mostrar_resumen, dados_situacion]
+llm_tools = llm.bind_tools([get_status, mostrar_resumen, dados_situacion, get_progreso_campaña, get_siguiente_beat, marcar_beat_completado, get_info_npc])
+Herramientas = [get_status, mostrar_resumen, dados_situacion, get_progreso_campaña, get_siguiente_beat, marcar_beat_completado, get_info_npc]
 mapa_herramientas = {t.name: t for t in Herramientas}
 
 
