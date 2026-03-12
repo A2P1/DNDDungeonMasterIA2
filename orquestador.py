@@ -54,8 +54,18 @@ def main():
         # Comprobar si el beat actual es de combate antes de pedir input
         beat_combate = _beat_es_combate()
         if beat_combate:
+            # Transición narrativa: el narrador introduce el combate
+            print(narrador(f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento."))
+
             resultado = combate(beat_combate["id"])
             marcar_beat_completado.invoke({"beat_id": beat_combate["id"]})
+
+            # Transición narrativa post-combate
+            if resultado == "victoria":
+                print(narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Narra las consecuencias de la victoria y guía hacia lo que viene después."))
+            else:
+                print(narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída."))
+                break
             continue
 
         with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:

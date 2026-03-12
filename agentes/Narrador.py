@@ -68,7 +68,9 @@ def narrador(user_input):
         #prompts = []
         # Si hay resumen, es decir, ha empezado la partida, se añade y se imprime antes de la partida
         messages.append(SystemMessage(content=f'MODO_INICIO: NO')) # Le decimos a la IA que no es la primera vez que interactúa en la partida
-        messages.append(SystemMessage(content=f'IMPORTANTE. No es tu primera intervención. Resumen: {RESUMEN_PATH}')) # Lo pasamos como SystemMessage en vez de HumanMessage para generar un historial sobre el que la IA se puede apoyar
+        with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
+            resumen_actual = f.read().strip()
+        messages.append(SystemMessage(content=f'IMPORTANTE. No es tu primera intervención. Resumen: {resumen_actual}')) # Lo pasamos como SystemMessage en vez de HumanMessage para generar un historial sobre el que la IA se puede apoyar
             #print("GUANTANAMO")
             #print("Resumen: " + resumen)
         # Si no hay resumen, inicia la partida de 0
@@ -81,7 +83,7 @@ def narrador(user_input):
 
         resumen = llm.invoke([
             SystemMessage(content=f"Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
-            HumanMessage(content=f"Resumen anterior: {RESUMEN_PATH} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
+            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
         ]).content.strip()
         with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
             f.write(resumen + "\n")
