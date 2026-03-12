@@ -1,5 +1,6 @@
 from agentes.Narrador import narrador, narrador_inicio
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña
+from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
@@ -14,16 +15,23 @@ def iniciar_campaña():
     """Si no existe campaña, pregunta al jugador y genera una."""
     if campaña_existe():
         print("Campaña existente encontrada. Continuando...\n")
-        return cargar_campaña()
+        campaña = cargar_campaña()
+    else:
+        print("=== CREACIÓN DE CAMPAÑA ===\n")
+        tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
+        personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
 
-    print("=== CREACIÓN DE CAMPAÑA ===\n")
-    tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
-    personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
+        print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
+        campaña = generar_campaña(tema, personaje)
+        print(f"¡Campaña '{campaña['titulo']}' creada!\n")
+        print(f"Gancho: {campaña['gancho']}\n")
 
-    print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
-    campaña = generar_campaña(tema, personaje)
-    print(f"¡Campaña '{campaña['titulo']}' creada!\n")
-    print(f"Gancho: {campaña['gancho']}\n")
+    # Enriquecer entidades si no existen
+    if not entidades_existen():
+        print("Generando fichas detalladas de enemigos y NPCs...\n")
+        enriquecer_entidades(campaña)
+        print("Fichas generadas.\n")
+
     return campaña
 
 
