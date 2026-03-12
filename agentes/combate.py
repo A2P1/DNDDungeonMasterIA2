@@ -25,8 +25,8 @@ parser = JsonOutputParser()
 # === UTILIDADES ===
 
 def _modificador(valor: int) -> int:
-    """Calcula el modificador de D&D a partir de un atributo (8→-1, 10→0, 14→+2, etc.)."""
-    return (valor - 10) // 2
+    """Devuelve el valor del atributo directamente (sistema 0-5)."""
+    return valor
 
 
 def _cargar_jugador() -> dict:

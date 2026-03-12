@@ -6,7 +6,10 @@ REGLAS:
 - Si un enemigo tiene "cantidad": 3, genera 3 entidades individuales con IDs únicos (ej: "b2_goblin_1", "b2_goblin_2", "b2_goblin_3")
 - Los IDs siguen el formato: "{beat_id}_{nombre_snake}_{numero}" para enemigos, "npc_{nombre_snake}" para NPCs
 - Respeta los valores de vida, ac, dado_daño y xp que vienen en la plantilla original como base
-- Los atributos (fue, des, con, int, sab, car) van de 6 a 18 y deben ser coherentes con el tipo de entidad:
+- Los atributos (fue, des, con, int, sab, car) van de 0 a 5 y se suman directamente como modificador (sin fórmula). Deben ser coherentes con el tipo de entidad:
+  - Enemigos normales: 2-4 puntos totales repartidos
+  - Jefes intermedios: 4-6 puntos totales repartidos
+  - Boss final: 6-8 puntos totales repartidos
   - Guerreros/brutos: fue y con altos
   - Ágiles/ladrones: des alta
   - Magos/brujos: int o sab altos
