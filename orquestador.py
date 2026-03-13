@@ -4,24 +4,49 @@ from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
 from tools.campana import get_siguiente_beat, marcar_beat_completado
 from dotenv import load_dotenv
-from config import RESUMEN_PATH
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH
 import json
 
 
-def iniciar_campaña():
-    """Si no existe campaña, pregunta al jugador y genera una."""
-    if campaña_existe():
-        print("Campaña existente encontrada. Continuando...\n")
-        campaña = cargar_campaña()
-    else:
-        print("=== CREACIÓN DE CAMPAÑA ===\n")
-        tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
-        personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
+def _nueva_campaña():
+    """Crea una campaña desde cero pidiendo datos al jugador."""
+    print("=== CREACIÓN DE CAMPAÑA ===\n")
+    tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
+    personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
 
-        print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
-        campaña = generar_campaña(tema, personaje)
-        print(f"¡Campaña '{campaña['titulo']}' creada!\n")
-        print(f"Gancho: {campaña['gancho']}\n")
+    print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
+    campaña = generar_campaña(tema, personaje)
+    print(f"¡Campaña '{campaña['titulo']}' creada!\n")
+    print(f"Gancho: {campaña['gancho']}\n")
+    return campaña
+
+
+def _limpiar_partida():
+    """Borra los archivos de la partida anterior para empezar de cero."""
+    for path in [CAMPAIGN_PATH, ENTIDADES_PATH]:
+        if path.exists():
+            path.unlink()
+    # Vaciar resumen
+    with open(RESUMEN_PATH, 'w', encoding='utf-8') as f:
+        f.write("")
+
+
+def iniciar_campaña():
+    """Muestra menú de inicio: continuar partida existente o empezar nueva."""
+    if campaña_existe():
+        campaña = cargar_campaña()
+        print(f"=== Campaña encontrada: '{campaña.get('titulo', 'Sin título')}' ===\n")
+        print("1. Continuar partida")
+        print("2. Nueva campaña\n")
+        opcion = input("Elige una opción (1/2): ").strip()
+
+        if opcion == "2":
+            _limpiar_partida()
+            campaña = _nueva_campaña()
+        else:
+            print("Continuando partida...\n")
+    else:
+        campaña = _nueva_campaña()
 
     # Enriquecer entidades si no existen
     if not entidades_existen():
@@ -76,6 +101,6 @@ def main():
                 break
             print(narrador(user_input))
         else:
-            print(narrador_inicio())
+            print(narrador_inicio(campaña))
 main()
 

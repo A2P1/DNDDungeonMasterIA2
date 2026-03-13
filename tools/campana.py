@@ -8,7 +8,7 @@ from config import CAMPAIGN_PATH
 
 
 @tool
-def get_progreso_campaña() -> str:
+def get_progreso_campana() -> str:
     """Devuelve el acto actual, beats completados y el siguiente beat pendiente.
     Útil para saber en qué punto de la historia estamos."""
     with open(CAMPAIGN_PATH, 'r', encoding='utf-8') as f:

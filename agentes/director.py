@@ -12,9 +12,12 @@ from config import DIRECTOR_PROMPT_PATH, CAMPAIGN_PATH, MODEL_NAME
 with open(DIRECTOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
     system_prompt = f.read().strip()
 
+# Escapar llaves del JSON de ejemplo para que LangChain no las interprete como variables
+system_prompt_escaped = system_prompt.replace("{", "{{").replace("}", "}}")
+
 # Prompt con variables para tema y personaje
 prompt = ChatPromptTemplate.from_messages([
-    ("system", system_prompt),
+    ("system", system_prompt_escaped),
     ("human", "Tema: {tema}. Personaje: {personaje}")
 ])
 

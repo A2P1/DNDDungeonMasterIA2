@@ -12,9 +12,12 @@ from config import ENRIQUECEDOR_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERA
 with open(ENRIQUECEDOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
     system_prompt = f.read().strip()
 
+# Escapar llaves del JSON de ejemplo para que LangChain no las interprete como variables
+system_prompt_escaped = system_prompt.replace("{", "{{").replace("}", "}}")
+
 # Prompt: recibe las entidades raw como JSON string
 prompt = ChatPromptTemplate.from_messages([
-    ("system", system_prompt),
+    ("system", system_prompt_escaped),
     ("human", "Entidades a enriquecer:\n{entidades_raw}")
 ])
 

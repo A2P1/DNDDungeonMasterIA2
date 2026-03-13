@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Tool
 from tools.stats import get_status
 from tools.resumen import mostrar_resumen
 from tools.dados import tirar_d20, tirar_dado
-from tools.campana import get_progreso_campaña, get_siguiente_beat, marcar_beat_completado, get_info_npc
+from tools.campana import get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc
 from tools.entidades import get_enemigos_beat, get_estado_combate, get_info_entidad
 from config import STATS_PATH
 
@@ -29,12 +29,12 @@ with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
 
 llm_tools = llm.bind_tools([
     get_status, mostrar_resumen, tirar_d20, tirar_dado,
-    get_progreso_campaña, get_siguiente_beat, marcar_beat_completado, get_info_npc,
+    get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
     get_enemigos_beat, get_estado_combate, get_info_entidad
 ])
 Herramientas = [
     get_status, mostrar_resumen, tirar_d20, tirar_dado,
-    get_progreso_campaña, get_siguiente_beat, marcar_beat_completado, get_info_npc,
+    get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
     get_enemigos_beat, get_estado_combate, get_info_entidad
 ]
 mapa_herramientas = {t.name: t for t in Herramientas}
@@ -89,9 +89,19 @@ def narrador(user_input):
             f.write(resumen + "\n")
         return respuesta.content
 
-def narrador_inicio():
+def narrador_inicio(campaña: dict = None):
     messages.append(SystemMessage(content=f'MODO_INICIO: SI'))
-    messages.append(HumanMessage(content='Inicia la partida de 0, Presenta la partida'))
+    if campaña:
+        contexto = (
+            f"CONTEXTO DE LA CAMPAÑA:\n"
+            f"- Título: {campaña.get('titulo', '')}\n"
+            f"- Gancho: {campaña.get('gancho', '')}\n"
+            f"- Lugar: {campaña.get('ambientacion', {}).get('lugar', '')}\n"
+            f"- Tono: {campaña.get('ambientacion', {}).get('tono', '')}\n"
+            f"- Conflicto: {campaña.get('ambientacion', {}).get('conflicto', '')}\n"
+        )
+        messages.append(SystemMessage(content=contexto))
+    messages.append(HumanMessage(content='Inicia la partida. Presenta la escena usando el gancho y la ambientación de la campaña.'))
     # Se genera el inicio de la partida
     respuesta = llm.invoke(messages)
         #print(respuesta.content)
