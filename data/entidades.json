@@ -1,13 +1,13 @@
 {
   "enemigos": [
     {
-      "id": "b3_pirata_bribon_1",
-      "nombre": "Pirata Bribón",
+      "id": "b3_goblin_1",
+      "nombre": "Goblin",
       "beat_origen": "b3",
-      "vida_max": 10,
-      "vida_actual": 10,
+      "vida_max": 8,
+      "vida_actual": 8,
       "ac": 12,
-      "dado_daño": "1d4",
+      "dado_daño": "1d6",
       "xp": 50,
       "atributos": {
         "fue": 1,
@@ -22,13 +22,13 @@
       "estado": "vivo"
     },
     {
-      "id": "b3_pirata_bribon_2",
-      "nombre": "Pirata Bribón",
+      "id": "b3_goblin_2",
+      "nombre": "Goblin",
       "beat_origen": "b3",
-      "vida_max": 10,
-      "vida_actual": 10,
+      "vida_max": 8,
+      "vida_actual": 8,
       "ac": 12,
-      "dado_daño": "1d4",
+      "dado_daño": "1d6",
       "xp": 50,
       "atributos": {
         "fue": 1,
@@ -43,13 +43,13 @@
       "estado": "vivo"
     },
     {
-      "id": "b3_pirata_bribon_3",
-      "nombre": "Pirata Bribón",
+      "id": "b3_goblin_3",
+      "nombre": "Goblin",
       "beat_origen": "b3",
-      "vida_max": 10,
-      "vida_actual": 10,
+      "vida_max": 8,
+      "vida_actual": 8,
       "ac": 12,
-      "dado_daño": "1d4",
+      "dado_daño": "1d6",
       "xp": 50,
       "atributos": {
         "fue": 1,
@@ -64,82 +64,80 @@
       "estado": "vivo"
     },
     {
-      "id": "b6_ragnar_el_traidor_1",
-      "nombre": "Ragnar el Traidor",
+      "id": "b6_ettin_1",
+      "nombre": "Ettin",
       "beat_origen": "b6",
       "vida_max": 40,
       "vida_actual": 40,
       "ac": 14,
       "dado_daño": "1d8",
-      "xp": 150,
+      "xp": 200,
       "atributos": {
-        "fue": 2,
-        "des": 1,
-        "con": 1,
-        "int": 1,
+        "fue": 3,
+        "des": 0,
+        "con": 2,
+        "int": 0,
         "sab": 0,
-        "car": 1
+        "car": 0
       },
-      "arma": "Espada larga",
-      "habilidades": [
-        "Traición súbita"
-      ],
+      "arma": "Maza doble",
+      "habilidades": [],
       "estado": "vivo"
     },
     {
-      "id": "b8_capitan_sombra_negra_1",
-      "nombre": "Capitán Sombra Negra",
+      "id": "b8_zaroth_el_guardian_oscuro_1",
+      "nombre": "Zaroth, el Guardián Oscuro",
       "beat_origen": "b8",
       "vida_max": 80,
       "vida_actual": 80,
       "ac": 16,
-      "dado_daño": "1d10",
-      "xp": 300,
+      "dado_daño": "2d6",
+      "xp": 500,
       "atributos": {
-        "fue": 3,
+        "fue": 2,
         "des": 1,
         "con": 2,
         "int": 1,
-        "sab": 0,
+        "sab": 1,
         "car": 1
       },
-      "arma": "Sable de abordaje",
+      "arma": "Espada oscura",
       "habilidades": [
-        "Orden de ataque",
-        "Golpe de sombra"
+        "Aura de miedo",
+        "Golpe sombrío"
       ],
       "estado": "vivo"
     }
   ],
   "npcs": [
     {
-      "id": "npc_mira_la_bruja_del_mar",
-      "nombre": "Mira la Bruja del Mar",
+      "id": "npc_gimli",
+      "nombre": "Gimli",
       "beat_origen": "b2",
-      "vida_max": 15,
-      "vida_actual": 15,
-      "ac": 10,
+      "vida_max": 12,
+      "vida_actual": 12,
+      "ac": 14,
       "rol": "aliado",
       "disposicion": "amistoso",
       "estado": "vivo"
     },
     {
-      "id": "npc_vargas_el_informante",
-      "nombre": "Vargas el Informante",
-      "beat_origen": "b4",
-      "vida_max": 12,
-      "vida_actual": 12,
-      "ac": 10,
+      "id": "npc_elena",
+      "nombre": "Elena",
+      "beat_origen": "b5",
+      "vida_max": 10,
+      "vida_actual": 10,
+      "ac": 12,
       "rol": "neutral",
       "disposicion": "indiferente",
       "estado": "vivo"
     },
     {
-      "id": "npc_ragnar_el_traidor",
-      "nombre": "Ragnar el Traidor",
-      "beat_origen": "general",
-      "vida_max": 20,
-      "vida_actual": 20,
+      "id": "npc_balin",
+      "nombre": "Balin",
+      "beat_origen": "b7",
+      "vida_max": 10,
+      "vida_actual": 10,
       "ac": 12,
       "rol": "traidor",
       "disposicion": "amistoso",

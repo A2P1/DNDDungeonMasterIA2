@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from tools.stats import get_status
 from tools.resumen import mostrar_resumen
+from tools.tool_combate import llamar_combate
 from tools.dados import tirar_d20, tirar_dado
 from tools.campana import get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc
 from tools.entidades import get_enemigos_beat, get_estado_combate, get_info_entidad
@@ -30,12 +31,12 @@ with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
 llm_tools = llm.bind_tools([
     get_status, mostrar_resumen, tirar_d20, tirar_dado,
     get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
-    get_enemigos_beat, get_estado_combate, get_info_entidad
+    get_enemigos_beat, get_estado_combate, get_info_entidad#, llamar_combate
 ])
 Herramientas = [
     get_status, mostrar_resumen, tirar_d20, tirar_dado,
     get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
-    get_enemigos_beat, get_estado_combate, get_info_entidad
+    get_enemigos_beat, get_estado_combate, get_info_entidad#, llamar_combate
 ]
 mapa_herramientas = {t.name: t for t in Herramientas}
 
