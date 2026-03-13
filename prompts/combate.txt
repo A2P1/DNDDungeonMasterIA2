@@ -18,7 +18,7 @@ Esto incluye CUALQUIER acción: ataques directos, acciones creativas, huida, etc
 Solo existen dos tipos de acción: "ataque" y "accion".
 
 Responde SOLO con un JSON (sin texto antes ni después) con esta estructura:
-{
+{{
   "viable": true/false,
   "razon": "string - por qué no es viable (solo si viable es false)",
   "tipo": "ataque | accion",
@@ -28,7 +28,7 @@ Responde SOLO con un JSON (sin texto antes ni después) con esta estructura:
   "objetivo": "string - id del enemigo afectado o null si afecta a todos",
   "efecto_exito": "string - qué pasa si la tirada tiene éxito",
   "efecto_fallo": "string - qué pasa si la tirada falla"
-}
+}}
 
 REGLAS PARA EVALUAR:
 

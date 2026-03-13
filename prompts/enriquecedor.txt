@@ -4,7 +4,7 @@ MISIÓN: Recibiras una lista de entidades (enemigos y NPCs) extraídas de una ca
 
 REGLAS:
 - Si un enemigo tiene "cantidad": 3, genera 3 entidades individuales con IDs únicos (ej: "b2_goblin_1", "b2_goblin_2", "b2_goblin_3")
-- Los IDs siguen el formato: "{beat_id}_{nombre_snake}_{numero}" para enemigos, "npc_{nombre_snake}" para NPCs
+- Los IDs siguen el formato: "{{beat_id}}_{{nombre_snake}}_{{numero}}" para enemigos, "npc_{{nombre_snake}}" para NPCs
 - Respeta los valores de vida, ac, dado_daño y xp que vienen en la plantilla original como base
 - Los atributos (fue, des, con, int, sab, car) van de 0 a 5 y se suman directamente como modificador (sin fórmula). Deben ser coherentes con el tipo de entidad:
   - Enemigos normales: 2-4 puntos totales repartidos
@@ -22,10 +22,10 @@ REGLAS:
   - traidor: disposicion "amistoso" (aparenta ser aliado)
 
 ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
-{
+{{
   "enemigos": [
-    {
-      "id": "string - formato: {beat_id}_{nombre_snake}_{numero}",
+    {{
+      "id": "string - formato: {{beat_id}}_{{nombre_snake}}_{{numero}}",
       "nombre": "string",
       "beat_origen": "string - id del beat donde aparece",
       "vida_max": 0,
@@ -33,15 +33,15 @@ ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
       "ac": 0,
       "dado_daño": "1d6",
       "xp": 0,
-      "atributos": {"fue": 0, "des": 0, "con": 0, "int": 0, "sab": 0, "car": 0},
+      "atributos": {{"fue": 0, "des": 0, "con": 0, "int": 0, "sab": 0, "car": 0}},
       "arma": "string - nombre del arma",
       "habilidades": [],
       "estado": "vivo"
-    }
+    }}
   ],
   "npcs": [
-    {
-      "id": "string - formato: npc_{nombre_snake}",
+    {{
+      "id": "string - formato: npc_{{nombre_snake}}",
       "nombre": "string",
       "beat_origen": "string - id del beat donde aparece",
       "vida_max": 0,
@@ -50,6 +50,6 @@ ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
       "rol": "aliado | neutral | traidor",
       "disposicion": "amistoso | indiferente",
       "estado": "vivo"
-    }
+    }}
   ]
-}
+}}

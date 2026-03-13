@@ -28,62 +28,62 @@ TIPOS DE BEAT VÁLIDOS:
 - "trampa": obstáculo ambiental. Incluye "check" y "efecto_fallo"
 
 ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
-{
+{{
   "titulo": "string",
   "gancho": "string - la situación inicial que motiva al jugador",
-  "ambientacion": {
+  "ambientacion": {{
     "lugar": "string - nombre del lugar principal",
     "tono": "string - adjetivos del ambiente",
     "conflicto": "string - qué está pasando en el mundo"
-  },
-  "antagonista": {
+  }},
+  "antagonista": {{
     "nombre": "string",
     "descripcion": "string - quién es y qué quiere",
     "motivacion": "string - por qué hace lo que hace"
-  },
+  }},
   "npcs": [
-    {
+    {{
       "nombre": "string",
       "rol": "aliado | neutral | traidor",
       "sabe": "string - qué información tiene",
       "quiere": "string - su motivación personal",
       "ubicacion": "string - lugar donde se encuentra"
-    }
+    }}
   ],
   "actos": [
-    {
+    {{
       "numero": 1,
       "titulo": "string",
       "objetivo": "string - qué debe lograr el jugador en este acto",
       "beats": [
-        {
+        {{
           "id": "b1",
           "tipo": "exploracion | npc | combate | jefe | climax | trampa",
           "descripcion": "string - qué ocurre en este momento",
           "ubicacion": "string - lugar donde ocurre",
           "completado": false,
           "enemigos": [
-            {
+            {{
               "nombre": "string",
               "cantidad": 1,
               "vida": 0,
               "ac": 0,
               "dado_daño": "1d6",
               "xp": 0
-            }
+            }}
           ],
           "npc": "string - nombre del NPC (solo si tipo es npc)",
           "info_que_revela": "string (solo si tipo es npc)",
-          "check": {"habilidad": "string", "dc": 0},
+          "check": {{"habilidad": "string", "dc": 0}},
           "efecto_fallo": "string (solo si tipo es trampa)"
-        }
+        }}
       ]
-    }
+    }}
   ],
   "encuentros_aleatorios": [
-    {"tirada": "1-2", "resultado": "string"},
-    {"tirada": "3-4", "resultado": "string"},
-    {"tirada": "5", "resultado": "string"},
-    {"tirada": "6", "resultado": "string"}
+    {{"tirada": "1-2", "resultado": "string"}},
+    {{"tirada": "3-4", "resultado": "string"}},
+    {{"tirada": "5", "resultado": "string"}},
+    {{"tirada": "6", "resultado": "string"}}
   ]
-}
+}}
