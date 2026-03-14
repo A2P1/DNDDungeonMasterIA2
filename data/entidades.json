@@ -1,0 +1,149 @@
+{
+  "enemigos": [
+    {
+      "id": "b3_pirata_bribon_1",
+      "nombre": "Pirata Bribón",
+      "beat_origen": "b3",
+      "vida_max": 10,
+      "vida_actual": 10,
+      "ac": 12,
+      "dado_daño": "1d4",
+      "xp": 50,
+      "atributos": {
+        "fue": 1,
+        "des": 2,
+        "con": 1,
+        "int": 0,
+        "sab": 0,
+        "car": 0
+      },
+      "arma": "Daga oxidada",
+      "habilidades": [],
+      "estado": "vivo"
+    },
+    {
+      "id": "b3_pirata_bribon_2",
+      "nombre": "Pirata Bribón",
+      "beat_origen": "b3",
+      "vida_max": 10,
+      "vida_actual": 10,
+      "ac": 12,
+      "dado_daño": "1d4",
+      "xp": 50,
+      "atributos": {
+        "fue": 1,
+        "des": 2,
+        "con": 1,
+        "int": 0,
+        "sab": 0,
+        "car": 0
+      },
+      "arma": "Daga oxidada",
+      "habilidades": [],
+      "estado": "vivo"
+    },
+    {
+      "id": "b3_pirata_bribon_3",
+      "nombre": "Pirata Bribón",
+      "beat_origen": "b3",
+      "vida_max": 10,
+      "vida_actual": 10,
+      "ac": 12,
+      "dado_daño": "1d4",
+      "xp": 50,
+      "atributos": {
+        "fue": 1,
+        "des": 2,
+        "con": 1,
+        "int": 0,
+        "sab": 0,
+        "car": 0
+      },
+      "arma": "Daga oxidada",
+      "habilidades": [],
+      "estado": "vivo"
+    },
+    {
+      "id": "b6_ragnar_el_traidor_1",
+      "nombre": "Ragnar el Traidor",
+      "beat_origen": "b6",
+      "vida_max": 40,
+      "vida_actual": 40,
+      "ac": 14,
+      "dado_daño": "1d8",
+      "xp": 150,
+      "atributos": {
+        "fue": 2,
+        "des": 1,
+        "con": 1,
+        "int": 1,
+        "sab": 0,
+        "car": 1
+      },
+      "arma": "Espada larga",
+      "habilidades": [
+        "Traición súbita"
+      ],
+      "estado": "vivo"
+    },
+    {
+      "id": "b8_capitan_sombra_negra_1",
+      "nombre": "Capitán Sombra Negra",
+      "beat_origen": "b8",
+      "vida_max": 80,
+      "vida_actual": 80,
+      "ac": 16,
+      "dado_daño": "1d10",
+      "xp": 300,
+      "atributos": {
+        "fue": 3,
+        "des": 1,
+        "con": 2,
+        "int": 1,
+        "sab": 0,
+        "car": 1
+      },
+      "arma": "Sable de abordaje",
+      "habilidades": [
+        "Orden de ataque",
+        "Golpe de sombra"
+      ],
+      "estado": "vivo"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "npc_mira_la_bruja_del_mar",
+      "nombre": "Mira la Bruja del Mar",
+      "beat_origen": "b2",
+      "vida_max": 15,
+      "vida_actual": 15,
+      "ac": 10,
+      "rol": "aliado",
+      "disposicion": "amistoso",
+      "estado": "vivo"
+    },
+    {
+      "id": "npc_vargas_el_informante",
+      "nombre": "Vargas el Informante",
+      "beat_origen": "b4",
+      "vida_max": 12,
+      "vida_actual": 12,
+      "ac": 10,
+      "rol": "neutral",
+      "disposicion": "indiferente",
+      "estado": "vivo"
+    },
+    {
+      "id": "npc_ragnar_el_traidor",
+      "nombre": "Ragnar el Traidor",
+      "beat_origen": "general",
+      "vida_max": 20,
+      "vida_actual": 20,
+      "ac": 12,
+      "rol": "traidor",
+      "disposicion": "amistoso",
+      "estado": "vivo"
+    }
+  ]
+}

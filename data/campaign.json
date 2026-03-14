@@ -1,0 +1,181 @@
+{
+  "titulo": "Sombras en la Bahía del Pirata",
+  "gancho": "Gustav, un enano con nariz grande, ha recibido un mensaje urgente de su primo secuestrado por la tripulación de un barco pirata que amenaza con destruir la ciudad si no se revelan los secretos del mapa del tesoro.",
+  "ambientacion": {
+    "lugar": "Bahía del Pirata",
+    "tono": "caótico, peligroso, intenso",
+    "conflicto": "Piratas aquejan la ciudad buscando un legendario tesoro escondido."
+  },
+  "antagonista": {
+    "nombre": "Capitán Sombra Negra",
+    "descripcion": "El temido capitán de una infame nave pirata que quiere hacerse con el tesoro oculto.",
+    "motivacion": "Desea el poder y la riqueza del tesoro legendario para dominar las aguas."
+  },
+  "npcs": [
+    {
+      "nombre": "Mira la Bruja del Mar",
+      "rol": "aliado",
+      "sabe": "Conoce la ubicación del mapa del tesoro.",
+      "quiere": "Busca un antiguo artefacto que forma parte del tesoro.",
+      "ubicacion": "Tienda de pociones en el muelle."
+    },
+    {
+      "nombre": "Vargas el Informante",
+      "rol": "neutral",
+      "sabe": "Rumores sobre la tripulación del Capitán Sombra Negra.",
+      "quiere": "Información sobre su enemigo personal.",
+      "ubicacion": "Taberna Escama Salada."
+    },
+    {
+      "nombre": "Ragnar el Traidor",
+      "rol": "traidor",
+      "sabe": "Detalles del plan del Capitán Sombra Negra.",
+      "quiere": "Cree que traicionando a los piratas obtendrá recompensas de la ciudad.",
+      "ubicacion": "Almacén abandonado."
+    }
+  ],
+  "actos": [
+    {
+      "numero": 1,
+      "titulo": "La llamada del océano",
+      "objetivo": "Encontrar el mapa del tesoro antes que los piratas.",
+      "beats": [
+        {
+          "id": "b1",
+          "tipo": "exploracion",
+          "descripcion": "Gustav busca pistas en el muelle sobre los lazos de su primo con los piratas.",
+          "ubicacion": "Muelle de la Bahía del Pirata",
+          "completado": false,
+          "check": {
+            "habilidad": "Percepción",
+            "dc": 12
+          }
+        },
+        {
+          "id": "b2",
+          "tipo": "npc",
+          "descripcion": "Mira revela la existencia del mapa y su potencial.",
+          "ubicacion": "Tienda de pociones en el muelle",
+          "completado": false,
+          "npc": "Mira la Bruja del Mar",
+          "info_que_revela": "El mapa está oculto en un rincón de la bahía."
+        },
+        {
+          "id": "b3",
+          "tipo": "combate",
+          "descripcion": "Piratas emboscan a Gustav para evitar que siga investigando.",
+          "ubicacion": "Callejón cerca del muelle",
+          "completado": false,
+          "enemigos": [
+            {
+              "nombre": "Pirata Bribón",
+              "cantidad": 3,
+              "vida": 10,
+              "ac": 12,
+              "dado_daño": "1d4",
+              "xp": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "numero": 2,
+      "titulo": "Entre tinieblas y rumores",
+      "objetivo": "Desenmascarar la localización del escondite pirata.",
+      "beats": [
+        {
+          "id": "b4",
+          "tipo": "npc",
+          "descripcion": "Vargas el Informante comparte rumores sobre un almacén comprometido.",
+          "ubicacion": "Taberna Escama Salada",
+          "completado": false,
+          "npc": "Vargas el Informante",
+          "info_que_revela": "Los piratas usan un almacén como base de operaciones clandestinas."
+        },
+        {
+          "id": "b5",
+          "tipo": "trampa",
+          "descripcion": "Al entrar en el almacén, Gustav activa una trampa de ballesta.",
+          "ubicacion": "Almacén abandonado",
+          "completado": false,
+          "check": {
+            "habilidad": "Destreza",
+            "dc": 14
+          },
+          "efecto_fallo": "Recibe 1d6 de daño por flecha."
+        },
+        {
+          "id": "b6",
+          "tipo": "jefe",
+          "descripcion": "Enfrentamiento con Ragnar, que intenta detener a Gustav.",
+          "ubicacion": "Centro del almacén",
+          "completado": false,
+          "enemigos": [
+            {
+              "nombre": "Ragnar el Traidor",
+              "cantidad": 1,
+              "vida": 40,
+              "ac": 14,
+              "dado_daño": "1d8",
+              "xp": 150
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "numero": 3,
+      "titulo": "El rugir del mar",
+      "objetivo": "Vencer al Capitán Sombra Negra y salvar la ciudad.",
+      "beats": [
+        {
+          "id": "b7",
+          "tipo": "exploracion",
+          "descripcion": "Gustav descubre el barco del Capitán Sombra Negra.",
+          "ubicacion": "Grutas escondidas de la bahía",
+          "completado": false,
+          "check": {
+            "habilidad": "Investigación",
+            "dc": 13
+          }
+        },
+        {
+          "id": "b8",
+          "tipo": "climax",
+          "descripcion": "Enfrentamiento final contra el Capitán Sombra Negra para salvar a su primo y asegurar el tesoro.",
+          "ubicacion": "Cubierta del barco pirata",
+          "completado": false,
+          "enemigos": [
+            {
+              "nombre": "Capitán Sombra Negra",
+              "cantidad": 1,
+              "vida": 80,
+              "ac": 16,
+              "dado_daño": "1d10",
+              "xp": 300
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "encuentros_aleatorios": [
+    {
+      "tirada": "1-2",
+      "resultado": "Una patrulla de marineros busca pistas sobre actividades sospechosas."
+    },
+    {
+      "tirada": "3-4",
+      "resultado": "Un comerciante ofrece información a cambio de monedas."
+    },
+    {
+      "tirada": "5",
+      "resultado": "Un mapa del tesoro falso aparece en posesión de un borracho."
+    },
+    {
+      "tirada": "6",
+      "resultado": "Un misterioso mensaje en una botella flota en el muelle."
+    }
+  ]
+}

@@ -1,1 +1,23 @@
-{"vida": 50, "AC": 15, "Da\u00f1o": 30}
+{
+  "nombre": "Thorin",
+  "clase": "Guerrero",
+  "raza": "Enano",
+  "nivel": 0,
+  "vida_max": 50,
+  "vida_actual": 50,
+  "ac": 12,
+  "atributos": {
+    "fue": 2,
+    "des": 0,
+    "con": 1,
+    "int": 0,
+    "sab": 1,
+    "car": 0
+  },
+  "arma": {
+    "nombre": "Hacha de guerra",
+    "dado_daño": "1d8"
+  },
+  "habilidades": ["Golpe furioso"],
+  "estado": "vivo"
+}

@@ -4,7 +4,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from tools.stats import get_status
 from tools.resumen import mostrar_resumen
-from tools.dados import dados_situacion
+from tools.dados import tirar_d20, tirar_dado
+from tools.campana import get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc
+from tools.entidades import get_enemigos_beat, get_estado_combate, get_info_entidad
 from config import STATS_PATH
 
 '''
@@ -25,8 +27,16 @@ llm = ChatOpenAI(model="gpt-4o", temperature=TEMPERATURE_NARRADOR) # Cargamos el
 with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
         system_prompt = f.read().strip()
 
-llm_tools = llm.bind_tools([get_status, mostrar_resumen, dados_situacion])
-Herramientas = [get_status, mostrar_resumen, dados_situacion]
+llm_tools = llm.bind_tools([
+    get_status, mostrar_resumen, tirar_d20, tirar_dado,
+    get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
+    get_enemigos_beat, get_estado_combate, get_info_entidad
+])
+Herramientas = [
+    get_status, mostrar_resumen, tirar_d20, tirar_dado,
+    get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
+    get_enemigos_beat, get_estado_combate, get_info_entidad
+]
 mapa_herramientas = {t.name: t for t in Herramientas}
 
 
@@ -58,7 +68,9 @@ def narrador(user_input):
         #prompts = []
         # Si hay resumen, es decir, ha empezado la partida, se añade y se imprime antes de la partida
         messages.append(SystemMessage(content=f'MODO_INICIO: NO')) # Le decimos a la IA que no es la primera vez que interactúa en la partida
-        messages.append(SystemMessage(content=f'IMPORTANTE. No es tu primera intervención. Resumen: {RESUMEN_PATH}')) # Lo pasamos como SystemMessage en vez de HumanMessage para generar un historial sobre el que la IA se puede apoyar
+        with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
+            resumen_actual = f.read().strip()
+        messages.append(SystemMessage(content=f'IMPORTANTE. No es tu primera intervención. Resumen: {resumen_actual}')) # Lo pasamos como SystemMessage en vez de HumanMessage para generar un historial sobre el que la IA se puede apoyar
             #print("GUANTANAMO")
             #print("Resumen: " + resumen)
         # Si no hay resumen, inicia la partida de 0
@@ -71,15 +83,25 @@ def narrador(user_input):
 
         resumen = llm.invoke([
             SystemMessage(content=f"Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
-            HumanMessage(content=f"Resumen anterior: {RESUMEN_PATH} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
+            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
         ]).content.strip()
         with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
             f.write(resumen + "\n")
         return respuesta.content
 
-def narrador_inicio():
+def narrador_inicio(campaña: dict = None):
     messages.append(SystemMessage(content=f'MODO_INICIO: SI'))
-    messages.append(HumanMessage(content='Inicia la partida de 0, Presenta la partida'))
+    if campaña:
+        contexto = (
+            f"CONTEXTO DE LA CAMPAÑA:\n"
+            f"- Título: {campaña.get('titulo', '')}\n"
+            f"- Gancho: {campaña.get('gancho', '')}\n"
+            f"- Lugar: {campaña.get('ambientacion', {}).get('lugar', '')}\n"
+            f"- Tono: {campaña.get('ambientacion', {}).get('tono', '')}\n"
+            f"- Conflicto: {campaña.get('ambientacion', {}).get('conflicto', '')}\n"
+        )
+        messages.append(SystemMessage(content=contexto))
+    messages.append(HumanMessage(content='Inicia la partida. Presenta la escena usando el gancho y la ambientación de la campaña.'))
     # Se genera el inicio de la partida
     respuesta = llm.invoke(messages)
         #print(respuesta.content)

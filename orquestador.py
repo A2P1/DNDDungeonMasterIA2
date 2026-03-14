@@ -1,139 +1,106 @@
 from agentes.Narrador import narrador, narrador_inicio
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from agentes.director import generar_campaña, campaña_existe, cargar_campaña
+from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
-from tools.stats import get_status
-from tools.tool_combate import llamar_combate
-from config import STATS_PATH, RESUMEN_PATH
+from tools.campana import get_siguiente_beat, marcar_beat_completado
+from dotenv import load_dotenv
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH
 import json
 
+
+def _nueva_campaña():
+    """Crea una campaña desde cero pidiendo datos al jugador."""
+    print("=== CREACIÓN DE CAMPAÑA ===\n")
+    tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
+    personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
+
+    print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
+    campaña = generar_campaña(tema, personaje)
+    print(f"¡Campaña '{campaña['titulo']}' creada!\n")
+    print(f"Gancho: {campaña['gancho']}\n")
+    return campaña
+
+
+def _limpiar_partida():
+    """Borra los archivos de la partida anterior para empezar de cero."""
+    for path in [CAMPAIGN_PATH, ENTIDADES_PATH]:
+        if path.exists():
+            path.unlink()
+    # Vaciar resumen
+    with open(RESUMEN_PATH, 'w', encoding='utf-8') as f:
+        f.write("")
+
+
+def iniciar_campaña():
+    """Muestra menú de inicio: continuar partida existente o empezar nueva."""
+    if campaña_existe():
+        campaña = cargar_campaña()
+        print(f"=== Campaña encontrada: '{campaña.get('titulo', 'Sin título')}' ===\n")
+        print("1. Continuar partida")
+        print("2. Nueva campaña\n")
+        opcion = input("Elige una opción (1/2): ").strip()
+
+        if opcion == "2":
+            _limpiar_partida()
+            campaña = _nueva_campaña()
+        else:
+            print("Continuando partida...\n")
+    else:
+        campaña = _nueva_campaña()
+
+    # Enriquecer entidades si no existen
+    if not entidades_existen():
+        print("Generando fichas detalladas de enemigos y NPCs...\n")
+        enriquecer_entidades(campaña)
+        print("Fichas generadas.\n")
+
+    return campaña
+
+
+def _beat_es_combate():
+    """Comprueba si el siguiente beat pendiente es de combate. Devuelve el beat o None."""
+    raw = get_siguiente_beat.invoke({})
+    if raw == "CAMPAÑA COMPLETADA":
+        return None
+    data = json.loads(raw)
+    beat = data.get("beat", {})
+    if beat.get("tipo") in ("combate", "jefe", "climax"):
+        return beat
+    return None
 
 
 def main():
     load_dotenv()
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
-    with open(STATS_PATH, 'r', encoding='utf-8') as f:
-        datos = json.load(f)
-    messages = [
-        
-    ]
-    llm_tools = llm.bind_tools([llamar_combate])
-    Herramientas = [llamar_combate]
-    mapa_herramientas = {t.name: t for t in Herramientas}
-    
+
+    # Generar o cargar la campaña antes de empezar
+    campaña = iniciar_campaña()
+
     while True:
+        # Comprobar si el beat actual es de combate antes de pedir input
+        beat_combate = _beat_es_combate()
+        if beat_combate:
+            # Transición narrativa: el narrador introduce el combate
+            print(narrador(f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento."))
+
+            resultado = combate(beat_combate["id"])
+            marcar_beat_completado.invoke({"beat_id": beat_combate["id"]})
+
+            # Transición narrativa post-combate
+            if resultado == "victoria":
+                print(narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Narra las consecuencias de la victoria y guía hacia lo que viene después."))
+            else:
+                print(narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída."))
+                break
+            continue
+
         with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
-            resumen = f.read().strip() # Cargamos el resumen de la partida para pasársela al narrador
+            resumen = f.read().strip()
         if resumen:
             user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
-            print("HOLA1")
-            respuesta = llm_tools.invoke(user_input) 
-            
-            if respuesta.tool_calls:
-                
-                for tool_call in respuesta.tool_calls:
-                    # Buscamos la función en nuestro mapa y la ejecutamos
-                    seleccionada = mapa_herramientas[tool_call["name"]]
-                    respuesta_herramienta = seleccionada.invoke(tool_call["args"])
-                    if tool_call["name"] == "llamar_combate":
-                        if "no hay enemigos" in respuesta_herramienta.lower():
-                            print(respuesta_herramienta)
-                            continue
-                        
-                    mensaje_herramienta = ToolMessage(
-                        content=str(respuesta_herramienta), 
-                        tool_call_id=tool_call["id"]
-                    )
-                    # 4. Invocación final: La IA ahora sí tiene los datos para hablar
-                    respuesta_final = llm_tools.invoke([
-                        HumanMessage(content=user_input),
-                        respuesta, # La petición original
-                        mensaje_herramienta # La respuesta de la función
-                    ])
-                                
-                    print(respuesta_final.content)
-                    # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
-                '''if respuesta.tool_calls:
-                        for tool_call in respuesta.tool_calls:
-                            # Buscamos la función en nuestro mapa y la ejecutamos
-                            seleccionada = mapa_herramientas[tool_call["name"]]
-                            respuesta_herramienta = seleccionada.invoke(tool_call["args"])
-                            # Si de todas las herramientas llama al combate
-                            if tool_call["name"] == "llamar_combate":
-                                #resultado_validacion = llamar_combate.invoke({"resumen_actual": resumen})
-                                #if "COMBATE PERMITIDO" in resultado_validacion:
-                                EnCombate = 1 # Asignamos el flag EnCombate a 1
-                                print("\n--- ¡ESPADAS FUERA! EL COMBATE COMIENZA ---\n")
-                                while EnCombate == 1:
-                                    accion = input("Qué acción quieres realizar? (atacar o huir)")
-                                    resultado, valor = combate(accion, datos)
-                                    #messages.append(HumanMessage(content=combate(accion))) # Guardamos la información del combate para que el narrador pueda procesarla y generar un resumen coherente
-                                    finalizado = llm_tools.invoke([
-                                        SystemMessage(content=f"Si el combate ha terminado, guarda la palabra 'FINALIZADO' en la variable finalizado"),
-                                        HumanMessage(content=resultado)
-                                    ]).content
-                                    if "FINALIZADO" in finalizado.upper():
-                                        comentario = llm_tools.invoke([
-                                            SystemMessage(content=f"el jugador ha sacado un {valor} al tirar los dados en un D&D. Si es mayor a 12 ha acertado, si no, ha fracasado. Narra esto de forma genérica en 1 frase mostrando el valor del dado teniendo en cuenta este resultado: {resultado} y guardalo en la variable 'comentario'")
-                                        ])
-                                    print(comentario.content)
-                                    EnCombate = 0
-                            else:
-                                respuesta_herramienta = resultado_validacion
-                            # DE AQUÍ
-
-                            # 3. Le pasamos el resultado a la IA para que lo procese
-                            # Es vital pasarle el ID para que la IA sepa a qué petición responde
-                            mensaje_herramienta = ToolMessage(
-                                content=str(respuesta_herramienta), 
-                                tool_call_id=tool_call["id"]
-                            )
-                            # 4. Invocación final: La IA ahora sí tiene los datos para hablar
-                            respuesta_final = llm_tools.invoke([
-                                HumanMessage(content=user_input),
-                                respuesta, # La petición original
-                                mensaje_herramienta # La respuesta de la función
-                            ])
-                            
-                            print(respuesta_final.content)
-                            # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
-
-                '''
-            else:
-                if user_input.lower() == "salir":
-                        break
-                        ''' else:
-                        messages.append(HumanMessage(content=user_input)) # Guardamos la info que ha introducido el usuario para procesarla
-                        decision = llm_tools.invoke([
-                            SystemMessage(content=f"Si el usuario menciona alguna de estas palabras: combate, lucha, pelea, ataco, ataque o enfrento, guarda la palabra 'COMBATE' en la variable decision" ),
-                            HumanMessage(content=user_input)
-                        ]).content # Comprobamos si el usuario quiere entrar en combate
-                        if llamar_combate() == 1:
-                            EnCombate = 1
-                            print('Combate iniciado')
-                            # EL BUCLE WHILE METERLO EN UNA FUNCIÓN APARTE PARA MEJOR COORDINACIÓN
-                            while EnCombate == 1:
-                                accion = input("Qué acción quieres realizar? (atacar o huir)")
-                                resultado, valor = combate(accion, datos)
-                                #messages.append(HumanMessage(content=combate(accion))) # Guardamos la información del combate para que el narrador pueda procesarla y generar un resumen coherente
-                                finalizado = llm_tools.invoke([
-                                    SystemMessage(content=f"Si el combate ha terminado, guarda la palabra 'FINALIZADO' en la variable finalizado"),
-                                    HumanMessage(content=resultado)
-                                ]).content
-                                if "FINALIZADO" in finalizado.upper():
-                                    comentario = llm_tools.invoke([
-                                        SystemMessage(content=f"el jugador ha sacado un {valor} al tirar los dados en un D&D. Si es mayor a 12 ha acertado, si no, ha fracasado. Narra esto de forma genérica en 1 frase mostrando el valor del dado teniendo en cuenta este resultado: {resultado} y guardalo en la variable 'comentario'")
-                                    ])
-                                    print(comentario.content)
-                                    EnCombate = 0
-
-                    '''
-                else:
-                    print("HOLA3")
-                    print(narrador(user_input)) # Hacemos la llamada al narrador pasándole el resumen y la información introducida por el usuario'''
-
+            if user_input.lower() == "salir":
+                break
+            print(narrador(user_input))
         else:
-            print(narrador_inicio())
+            print(narrador_inicio(campaña))
 main()
 
