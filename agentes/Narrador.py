@@ -63,8 +63,7 @@ def narrador(user_input):
                 mensaje_herramienta # La respuesta de la función
             ])
                         
-            print(respuesta_final.content)
-            # HASTA AQUÍ ES FIJO PARA TODAS LAS TOOLS
+            return respuesta_final.content
     else:
         #prompts = []
         # Si hay resumen, es decir, ha empezado la partida, se añade y se imprime antes de la partida

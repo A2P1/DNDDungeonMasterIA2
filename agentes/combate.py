@@ -10,6 +10,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from tools.entidades import dañar_enemigo, get_enemigos_beat, get_estado_combate, get_info_entidad
 from tools.dados import tirar_d20, tirar_dado
 from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME
+from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador
 
 load_dotenv()
 
@@ -64,11 +65,11 @@ def _evaluar_accion(accion: str, contexto_combate: str) -> dict:
 
 def _mostrar_estado(jugador: dict, beat_id: str):
     """Muestra el estado actual del combate."""
-    estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
+    estado_raw = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
     enemigos_str = ", ".join(
-        f"{e['nombre']} ({e['vida']})" for e in estado.get("enemigos_vivos", [])
+        f"{e['nombre']} ({e['vida']})" for e in estado_raw.get("enemigos_vivos", [])
     )
-    print(f"\n[Tu vida: {jugador['vida_actual']}/{jugador['vida_max']} | Enemigos: {enemigos_str}]\n")
+    estado_combate(jugador['vida_actual'], jugador['vida_max'], enemigos_str)
 
 
 # === COMBATE PRINCIPAL ===
@@ -94,7 +95,7 @@ def combate(beat_id: str) -> str:
     # Narrar inicio
     nombres = ", ".join(f"{e['nombre']} (AC:{e['ac']}, HP:{e['vida_actual']})" for e in enemigos)
     arma_jugador = jugador.get("arma", {}).get("nombre", "sus puños")
-    print(_narrar(
+    combate_msg(_narrar(
         f"El jugador ({jugador['nombre']}, armado con {arma_jugador}) se encuentra con: {nombres}. "
         f"Describe su aparición amenazante."
     ))
@@ -102,7 +103,7 @@ def combate(beat_id: str) -> str:
 
     while True:
         # === TURNO DEL JUGADOR ===
-        accion = input("¿Qué haces? > ").strip()
+        accion = prompt_jugador()
 
         if not accion:
             continue
@@ -127,7 +128,7 @@ def combate(beat_id: str) -> str:
 
         if not evaluacion.get("viable", False):
             razon = evaluacion.get("razon", "Eso no es posible aquí.")
-            print(_narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}"))
+            combate_msg(_narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}"))
             continue
 
         tipo = evaluacion.get("tipo", "accion")
@@ -160,21 +161,21 @@ def combate(beat_id: str) -> str:
                         resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
                         msg_daño += resultado["mensaje"] + " "
 
-                print(_narrar(
+                combate_msg(_narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                     f"{tirada}+{mod}={total} vs DC {dc}. "
                     f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
                 ))
             else:
                 efecto = evaluacion.get("efecto_exito", "")
-                print(_narrar(
+                combate_msg(_narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                     f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
                 ))
         else:
             # === FALLO ===
             efecto = evaluacion.get("efecto_fallo", "")
-            print(_narrar(
+            combate_msg(_narrar(
                 f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                 f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
             ))
@@ -183,7 +184,7 @@ def combate(beat_id: str) -> str:
         estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
         if estado["combate_terminado"]:
             xp_total = sum(e.get("xp", 0) for e in enemigos)
-            print(_narrar(f"Todos los enemigos han caído. El jugador obtiene {xp_total} XP."))
+            victoria_msg(_narrar(f"Todos los enemigos han caído. El jugador obtiene {xp_total} XP."))
             return "victoria"
 
         # === TURNO DE LOS ENEMIGOS ===
@@ -201,21 +202,21 @@ def combate(beat_id: str) -> str:
                 jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo)
                 _guardar_jugador(jugador)
 
-                print(_narrar(
+                enemigo_msg(info['nombre'], _narrar(
                     f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
                     f"Tirada: {tirada_enemigo}+{mod_fue_enemigo}={total_enemigo} vs AC {jugador['ac']}. "
                     f"ACIERTA. Daño: {daño_enemigo}. "
                     f"Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
                 ))
             else:
-                print(_narrar(
+                enemigo_msg(info['nombre'], _narrar(
                     f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
                     f"Tirada: {tirada_enemigo}+{mod_fue_enemigo}={total_enemigo} vs AC {jugador['ac']}. FALLA."
                 ))
 
         # === CHECK DERROTA ===
         if jugador["vida_actual"] <= 0:
-            print(_narrar(
+            derrota_msg(_narrar(
                 f"{jugador['nombre']} cae con {jugador['vida_actual']} HP. "
                 f"Narra su derrota."
             ))
