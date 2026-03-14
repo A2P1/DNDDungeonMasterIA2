@@ -3,6 +3,7 @@ from agentes.director import generar_campaña, campaña_existe, cargar_campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
 from tools.campana import get_siguiente_beat, marcar_beat_completado
+from tools.tool_combate import llamar_combate
 from dotenv import load_dotenv
 from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH
 import json
@@ -76,6 +77,7 @@ def main():
     campaña = iniciar_campaña()
 
     while True:
+        
         # Comprobar si el beat actual es de combate antes de pedir input
         beat_combate = _beat_es_combate()
         if beat_combate:

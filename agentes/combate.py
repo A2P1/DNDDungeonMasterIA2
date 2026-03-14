@@ -77,6 +77,7 @@ def combate(beat_id: str) -> str:
     Returns:
         "victoria" o "derrota"
     """
+    print("Estamos en combate")
     # Cargar enemigos y jugador
     enemigos_raw = get_enemigos_beat.invoke({"beat_id": beat_id})
     try:
