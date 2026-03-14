@@ -69,8 +69,7 @@ def narrador(user_input):
         #prompts = []
         # Si hay resumen, es decir, ha empezado la partida, se añade y se imprime antes de la partida
         messages.append(SystemMessage(content=f'MODO_INICIO: NO')) # Le decimos a la IA que no es la primera vez que interactúa en la partida
-        with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
-            resumen_actual = f.read().strip()
+        resumen_actual = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
         messages.append(SystemMessage(content=f'IMPORTANTE. No es tu primera intervención. Resumen: {resumen_actual}')) # Lo pasamos como SystemMessage en vez de HumanMessage para generar un historial sobre el que la IA se puede apoyar
             #print("GUANTANAMO")
             #print("Resumen: " + resumen)
@@ -86,6 +85,7 @@ def narrador(user_input):
             SystemMessage(content=f"Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
             HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
         ]).content.strip()
+        RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
             f.write(resumen + "\n")
         return respuesta.content
@@ -114,9 +114,10 @@ def narrador_inicio(campaña: dict = None):
         HumanMessage(content=f"Resumen de la historia: {respuesta.content}") # Le pasamos esta info como HumanMessage porque es esa misma info la que tiene que resumir
     ]).content.strip()
 
+    RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
         f.write(resumen + "\n")
-    return respuesta.content   
+    return respuesta.content
 #narrador()
 
 

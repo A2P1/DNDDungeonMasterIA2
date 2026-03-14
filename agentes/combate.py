@@ -30,6 +30,8 @@ def _modificador(valor: int) -> int:
 
 
 def _cargar_jugador() -> dict:
+    if not STATS_PATH.exists():
+        return {}
     with open(STATS_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
 

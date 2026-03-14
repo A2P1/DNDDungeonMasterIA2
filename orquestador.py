@@ -26,7 +26,8 @@ def _limpiar_partida():
     for path in [CAMPAIGN_PATH, ENTIDADES_PATH]:
         if path.exists():
             path.unlink()
-    # Vaciar resumen
+    # Vaciar resumen (crear directorio si no existe)
+    RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(RESUMEN_PATH, 'w', encoding='utf-8') as f:
         f.write("")
 
@@ -93,8 +94,7 @@ def main():
                 break
             continue
 
-        with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
-            resumen = f.read().strip()
+        resumen = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
         if resumen:
             user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
             if user_input.lower() == "salir":
