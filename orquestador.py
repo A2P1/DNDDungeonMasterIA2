@@ -2,12 +2,19 @@ from agentes.Narrador import narrador, narrador_inicio
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
+from agentes.combate_natural import combate_natural
 from tools.campana import get_siguiente_beat, marcar_beat_completado
 from dotenv import load_dotenv
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.output_parsers import JsonOutputParser
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERATURE_LOGICA
 from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg,
                 sistema_msg, titulo_msg, prompt_jugador, prompt_input)
 import json
+
+_llm_detector = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA)
+_parser_detector = JsonOutputParser()
 
 
 def _nueva_campaña():
@@ -72,6 +79,61 @@ def _beat_es_combate():
     return None
 
 
+def _detectar_intento_ataque(user_input: str) -> bool:
+    """Detecta si el jugador quiere atacar a alguien. Devuelve True si es un intento de ataque."""
+    respuesta = _llm_detector.invoke([
+        SystemMessage(content=(
+            "Eres un detector de intención de combate en un juego de rol. "
+            "Determina si el jugador quiere atacar, golpear, herir o agredir físicamente a alguien. "
+            "Responde SOLO con JSON válido, sin texto extra: "
+            "{\"quiere_atacar\": true} o {\"quiere_atacar\": false}"
+        )),
+        HumanMessage(content=f"Acción del jugador: {user_input}")
+    ])
+    try:
+        resultado = _parser_detector.parse(respuesta.content)
+        return bool(resultado.get("quiere_atacar", False))
+    except Exception:
+        return False
+
+
+def _get_entidades_presentes() -> list:
+    """Devuelve las entidades vivas (enemigos y NPCs) presentes en el beat actual."""
+    raw = get_siguiente_beat.invoke({})
+    if raw == "CAMPAÑA COMPLETADA":
+        return []
+
+    data = json.loads(raw)
+    beat = data.get("beat", {})
+    beat_id = beat.get("id", "")
+
+    if not ENTIDADES_PATH.exists():
+        return []
+
+    with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+        entidades = json.load(f)
+
+    presentes = []
+
+    # Enemigos del beat actual que estén vivos
+    for e in entidades.get("enemigos", []):
+        if e.get("beat_origen") == beat_id and e.get("estado") == "vivo":
+            e_copy = dict(e)
+            e_copy["tipo_entidad"] = "enemigo"
+            presentes.append(e_copy)
+
+    # NPC del beat (si tiene) que esté vivo
+    npc_nombre = beat.get("npc")
+    if npc_nombre:
+        for npc in entidades.get("npcs", []):
+            if npc.get("nombre", "").lower() == npc_nombre.lower() and npc.get("estado") == "vivo":
+                npc_copy = dict(npc)
+                npc_copy["tipo_entidad"] = "npc"
+                presentes.append(npc_copy)
+
+    return presentes
+
+
 def main():
     load_dotenv()
 
@@ -103,6 +165,18 @@ def main():
             user_input = prompt_jugador()
             if user_input.lower() == "salir":
                 break
+
+            # Detectar si el jugador quiere atacar fuera de un beat de combate
+            if _detectar_intento_ataque(user_input):
+                entidades = _get_entidades_presentes()
+                if entidades:
+                    narrador_msg(narrador(f"[SISTEMA] El jugador intenta atacar. Acción: '{user_input}'. Narra brevemente cómo irrumpe el enfrentamiento."))
+                    resultado = combate_natural(entidades)
+                    if resultado == "derrota":
+                        break
+                    narrador_msg(narrador("[SISTEMA] El jugador acaba de terminar un enfrentamiento inesperado. Narra las consecuencias y continúa la historia."))
+                    continue
+
             narrador_msg(narrador(user_input))
         else:
             narrador_msg(narrador_inicio(campaña))
