@@ -79,20 +79,23 @@ def _beat_es_combate():
     return None
 
 
-def _detectar_intento_ataque(user_input: str) -> bool:
-    """Detecta si el jugador quiere atacar a alguien. Devuelve True si es un intento de ataque."""
+def _detectar_intento_ataque(user_input: str, resumen: str) -> bool:
+    """Detecta si el jugador quiere atacar a alguien que está presente en el contexto narrativo.
+    Devuelve True solo si hay intención de ataque Y hay una entidad atacable en escena."""
     respuesta = _llm_detector.invoke([
         SystemMessage(content=(
-            "Eres un detector de intención de combate en un juego de rol. "
-            "Determina si el jugador quiere atacar, golpear, herir o agredir físicamente a alguien. "
-            "Responde SOLO con JSON válido, sin texto extra: "
-            "{\"quiere_atacar\": true} o {\"quiere_atacar\": false}"
+            "Eres un árbitro de combate en un juego de rol. Tu tarea es determinar DOS cosas:\n"
+            "1. ¿El jugador quiere atacar, golpear, herir o agredir físicamente a alguien?\n"
+            "2. ¿El contexto narrativo reciente menciona algún personaje, criatura o entidad "
+            "que pueda ser atacada (NPC, enemigo, guardia, animal, etc.)?\n\n"
+            "Responde SOLO con JSON válido, sin texto extra:\n"
+            "{\"quiere_atacar\": true/false, \"hay_objetivo_en_escena\": true/false}"
         )),
-        HumanMessage(content=f"Acción del jugador: {user_input}")
+        HumanMessage(content=f"Contexto narrativo reciente:\n{resumen}\n\nAcción del jugador: {user_input}")
     ])
     try:
         resultado = _parser_detector.parse(respuesta.content)
-        return bool(resultado.get("quiere_atacar", False))
+        return bool(resultado.get("quiere_atacar", False) and resultado.get("hay_objetivo_en_escena", False))
     except Exception:
         return False
 
@@ -134,6 +137,64 @@ def _get_entidades_presentes() -> list:
     return presentes
 
 
+def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list:
+    """Genera stats temporales para un enemigo narrativo (no registrado en entidades.json)
+    y lo inserta en entidades.json para que el sistema de combate pueda operar con él."""
+    llm_gen = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
+    respuesta = llm_gen.invoke([
+        SystemMessage(content=(
+            "Eres un generador de stats de enemigos para D&D. "
+            "Basándote en el contexto narrativo, genera stats para el o los enemigos "
+            "que el jugador quiere atacar. "
+            "Responde SOLO con JSON válido (lista), sin texto extra:\n"
+            "[\n"
+            "  {\n"
+            '    "id": "temp_<nombre_sin_espacios>_1",\n'
+            '    "nombre": "<nombre legible>",\n'
+            '    "tipo": "humano",\n'
+            '    "beat_origen": "temp",\n'
+            '    "estado": "vivo",\n'
+            '    "vida_max": <10-20>,\n'
+            '    "vida_actual": <igual a vida_max>,\n'
+            '    "ac": <10-13>,\n'
+            '    "dado_daño": "1d6",\n'
+            '    "xp": 50,\n'
+            '    "atributos": {"fue": 2, "des": 2, "con": 1, "int": 1, "sab": 1, "car": 1},\n'
+            '    "arma": "daga",\n'
+            '    "descripcion": "<descripción breve>"\n'
+            "  }\n"
+            "]\n"
+            "Genera solo los enemigos que el jugador menciona atacar directamente. "
+            "Ajusta los stats al tipo de personaje que aparece en el contexto."
+        )),
+        HumanMessage(content=f"Contexto narrativo reciente:\n{resumen}\n\nAcción del jugador: {user_input}")
+    ])
+    try:
+        enemigos = _parser_detector.parse(respuesta.content)
+        if not isinstance(enemigos, list):
+            return []
+
+        # Insertar en entidades.json para que dañar_enemigo pueda encontrarlos
+        with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+            entidades = json.load(f)
+
+        ids_existentes = {e["id"] for e in entidades.get("enemigos", [])}
+        nuevos = []
+        for e in enemigos:
+            if e.get("id") and e["id"] not in ids_existentes:
+                entidades["enemigos"].append(e)
+                e_con_tipo = dict(e)
+                e_con_tipo["tipo_entidad"] = "enemigo"
+                nuevos.append(e_con_tipo)
+
+        with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(entidades, f, indent=2, ensure_ascii=False)
+
+        return nuevos
+    except Exception:
+        return []
+
+
 def main():
     load_dotenv()
 
@@ -167,8 +228,10 @@ def main():
                 break
 
             # Detectar si el jugador quiere atacar fuera de un beat de combate
-            if _detectar_intento_ataque(user_input):
+            if _detectar_intento_ataque(user_input, resumen):
                 entidades = _get_entidades_presentes()
+                if not entidades:
+                    entidades = _generar_enemigo_narrativo(user_input, resumen)
                 if entidades:
                     narrador_msg(narrador(f"[SISTEMA] El jugador intenta atacar. Acción: '{user_input}'. Narra brevemente cómo irrumpe el enfrentamiento."))
                     resultado = combate_natural(entidades)
