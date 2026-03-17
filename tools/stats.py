@@ -6,5 +6,7 @@ from config import STATS_PATH
 def get_status() -> str:
     """Útil para cuando el usuario pregunte por sus estadísticas de salud (vida), defensa o ataque.
     Devuelve el estado actual del personaje en formato JSON."""
+    if not STATS_PATH.exists():
+        return "{}"
     with open(STATS_PATH, 'r', encoding='utf-8') as f:
         return f.read()

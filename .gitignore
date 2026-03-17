@@ -11,5 +11,5 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Estado de partida (no es código, es datos de ejecución)
-data/resumen.txt
+# Datos de partida/ejecución
+data/

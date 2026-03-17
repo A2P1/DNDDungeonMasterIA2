@@ -2,22 +2,31 @@ from agentes.Narrador import narrador, narrador_inicio
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
+from agentes.combate_natural import combate_natural
 from tools.campana import get_siguiente_beat, marcar_beat_completado
 from dotenv import load_dotenv
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.output_parsers import JsonOutputParser
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERATURE_LOGICA
+from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg,
+                sistema_msg, titulo_msg, prompt_jugador, prompt_input)
 import json
+
+_llm_detector = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA)
+_parser_detector = JsonOutputParser()
 
 
 def _nueva_campaña():
     """Crea una campaña desde cero pidiendo datos al jugador."""
-    print("=== CREACIÓN DE CAMPAÑA ===\n")
-    tema = input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata): ")
-    personaje = input("Describe tu personaje (ej: Thorin, enano guerrero): ")
+    titulo_msg("CREACIÓN DE CAMPAÑA")
+    tema = prompt_input("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata)")
+    personaje = prompt_input("Describe tu personaje (ej: Thorin, enano guerrero)")
 
-    print("\nGenerando tu campaña... (esto puede tardar unos segundos)\n")
+    sistema_msg("Generando tu campaña... (esto puede tardar unos segundos)")
     campaña = generar_campaña(tema, personaje)
-    print(f"¡Campaña '{campaña['titulo']}' creada!\n")
-    print(f"Gancho: {campaña['gancho']}\n")
+    titulo_msg(f"¡Campaña '{campaña['titulo']}' creada!")
+    narrador_msg(f"Gancho: {campaña['gancho']}")
     return campaña
 
 
@@ -26,7 +35,8 @@ def _limpiar_partida():
     for path in [CAMPAIGN_PATH, ENTIDADES_PATH]:
         if path.exists():
             path.unlink()
-    # Vaciar resumen
+    # Vaciar resumen (crear directorio si no existe)
+    RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(RESUMEN_PATH, 'w', encoding='utf-8') as f:
         f.write("")
 
@@ -35,24 +45,24 @@ def iniciar_campaña():
     """Muestra menú de inicio: continuar partida existente o empezar nueva."""
     if campaña_existe():
         campaña = cargar_campaña()
-        print(f"=== Campaña encontrada: '{campaña.get('titulo', 'Sin título')}' ===\n")
-        print("1. Continuar partida")
-        print("2. Nueva campaña\n")
-        opcion = input("Elige una opción (1/2): ").strip()
+        titulo_msg(f"Campaña encontrada: '{campaña.get('titulo', 'Sin título')}'")
+        print("  1. Continuar partida")
+        print("  2. Nueva campaña\n")
+        opcion = prompt_input("Elige una opción (1/2)")
 
         if opcion == "2":
             _limpiar_partida()
             campaña = _nueva_campaña()
         else:
-            print("Continuando partida...\n")
+            sistema_msg("Continuando partida...")
     else:
         campaña = _nueva_campaña()
 
     # Enriquecer entidades si no existen
     if not entidades_existen():
-        print("Generando fichas detalladas de enemigos y NPCs...\n")
+        sistema_msg("Generando fichas detalladas de enemigos y NPCs...")
         enriquecer_entidades(campaña)
-        print("Fichas generadas.\n")
+        sistema_msg("Fichas generadas.")
 
     return campaña
 
@@ -69,6 +79,61 @@ def _beat_es_combate():
     return None
 
 
+def _detectar_intento_ataque(user_input: str) -> bool:
+    """Detecta si el jugador quiere atacar a alguien. Devuelve True si es un intento de ataque."""
+    respuesta = _llm_detector.invoke([
+        SystemMessage(content=(
+            "Eres un detector de intención de combate en un juego de rol. "
+            "Determina si el jugador quiere atacar, golpear, herir o agredir físicamente a alguien. "
+            "Responde SOLO con JSON válido, sin texto extra: "
+            "{\"quiere_atacar\": true} o {\"quiere_atacar\": false}"
+        )),
+        HumanMessage(content=f"Acción del jugador: {user_input}")
+    ])
+    try:
+        resultado = _parser_detector.parse(respuesta.content)
+        return bool(resultado.get("quiere_atacar", False))
+    except Exception:
+        return False
+
+
+def _get_entidades_presentes() -> list:
+    """Devuelve las entidades vivas (enemigos y NPCs) presentes en el beat actual."""
+    raw = get_siguiente_beat.invoke({})
+    if raw == "CAMPAÑA COMPLETADA":
+        return []
+
+    data = json.loads(raw)
+    beat = data.get("beat", {})
+    beat_id = beat.get("id", "")
+
+    if not ENTIDADES_PATH.exists():
+        return []
+
+    with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+        entidades = json.load(f)
+
+    presentes = []
+
+    # Enemigos del beat actual que estén vivos
+    for e in entidades.get("enemigos", []):
+        if e.get("beat_origen") == beat_id and e.get("estado") == "vivo":
+            e_copy = dict(e)
+            e_copy["tipo_entidad"] = "enemigo"
+            presentes.append(e_copy)
+
+    # NPC del beat (si tiene) que esté vivo
+    npc_nombre = beat.get("npc")
+    if npc_nombre:
+        for npc in entidades.get("npcs", []):
+            if npc.get("nombre", "").lower() == npc_nombre.lower() and npc.get("estado") == "vivo":
+                npc_copy = dict(npc)
+                npc_copy["tipo_entidad"] = "npc"
+                presentes.append(npc_copy)
+
+    return presentes
+
+
 def main():
     load_dotenv()
 
@@ -80,27 +145,39 @@ def main():
         beat_combate = _beat_es_combate()
         if beat_combate:
             # Transición narrativa: el narrador introduce el combate
-            print(narrador(f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento."))
+            narrador_msg(narrador(f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento."))
 
             resultado = combate(beat_combate["id"])
             marcar_beat_completado.invoke({"beat_id": beat_combate["id"]})
 
             # Transición narrativa post-combate
             if resultado == "victoria":
-                print(narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Narra las consecuencias de la victoria y guía hacia lo que viene después."))
+                texto = narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Narra las consecuencias de la victoria y guía hacia lo que viene después.")
+                victoria_msg(texto)
             else:
-                print(narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída."))
+                texto = narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída.")
+                derrota_msg(texto)
                 break
             continue
 
-        with open(RESUMEN_PATH, 'r', encoding='utf-8') as f:
-            resumen = f.read().strip()
+        resumen = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
         if resumen:
-            user_input = input("Escribe tu mensaje (o 'salir' para terminar): \n")
+            user_input = prompt_jugador()
             if user_input.lower() == "salir":
                 break
-            print(narrador(user_input))
-        else:
-            print(narrador_inicio(campaña))
-main()
 
+            # Detectar si el jugador quiere atacar fuera de un beat de combate
+            if _detectar_intento_ataque(user_input):
+                entidades = _get_entidades_presentes()
+                if entidades:
+                    narrador_msg(narrador(f"[SISTEMA] El jugador intenta atacar. Acción: '{user_input}'. Narra brevemente cómo irrumpe el enfrentamiento."))
+                    resultado = combate_natural(entidades)
+                    if resultado == "derrota":
+                        break
+                    narrador_msg(narrador("[SISTEMA] El jugador acaba de terminar un enfrentamiento inesperado. Narra las consecuencias y continúa la historia."))
+                    continue
+
+            narrador_msg(narrador(user_input))
+        else:
+            narrador_msg(narrador_inicio(campaña))
+main()
