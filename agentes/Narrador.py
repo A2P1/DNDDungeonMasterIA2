@@ -47,23 +47,24 @@ messages = [
 def narrador(user_input):
     respuesta = llm_tools.invoke(messages + [HumanMessage(content=user_input)])
     if respuesta.tool_calls:
+        # Recopilar TODAS las respuestas de herramientas antes de la invocación final
+        tool_messages = []
         for tool_call in respuesta.tool_calls:
-            # Buscamos la función en nuestro mapa y la ejecutamos
             seleccionada = mapa_herramientas[tool_call["name"]]
             respuesta_herramienta = seleccionada.invoke(tool_call["args"])
-            mensaje_herramienta = ToolMessage(
-                content=str(respuesta_herramienta), 
+            tool_messages.append(ToolMessage(
+                content=str(respuesta_herramienta),
                 tool_call_id=tool_call["id"]
-            )
-            # 4. Invocación final: La IA ahora sí tiene los datos para hablar
-            respuesta_final = llm_tools.invoke([
-                 SystemMessage(content=system_prompt), # Le decimos a la IA que no es la primera vez que interactúa en la partida
-                HumanMessage(content=user_input),
-                respuesta, # La petición original
-                mensaje_herramienta # La respuesta de la función
-            ])
-                        
-            return respuesta_final.content
+            ))
+
+        # Invocación final con TODOS los ToolMessages de una vez
+        respuesta_final = llm_tools.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_input),
+            respuesta,
+            *tool_messages
+        ])
+        return respuesta_final.content
     else:
         #prompts = []
         # Si hay resumen, es decir, ha empezado la partida, se añade y se imprime antes de la partida

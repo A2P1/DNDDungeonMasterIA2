@@ -62,7 +62,12 @@ def crear_personaje(descripcion: str) -> dict:
         HumanMessage(content=f"Descripción del personaje: {descripcion}")
     ])
 
-    stats = _parser.parse(respuesta.content)
+    import re
+    contenido = respuesta.content
+    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido)
+    if match:
+        contenido = match.group(1).strip()
+    stats = json.loads(contenido)
 
     # Asegurar que vida_actual == vida_max al crear
     stats["vida_actual"] = stats.get("vida_max", 12)

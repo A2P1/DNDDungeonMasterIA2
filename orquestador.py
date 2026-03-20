@@ -181,7 +181,14 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list:
         HumanMessage(content=f"Contexto narrativo reciente:\n{resumen}\n\nAcción del jugador: {user_input}")
     ])
     try:
-        enemigos = _parser_detector.parse(respuesta.content)
+        # Extraer JSON aunque venga envuelto en bloques markdown ```json ... ```
+        import re
+        contenido = respuesta.content
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido)
+        if match:
+            contenido = match.group(1).strip()
+
+        enemigos = json.loads(contenido)
         if not isinstance(enemigos, list):
             return []
 
@@ -202,7 +209,8 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list:
             json.dump(entidades, f, indent=2, ensure_ascii=False)
 
         return nuevos
-    except Exception:
+    except Exception as e:
+        sistema_msg(f"[DEBUG] Excepción en _generar_enemigo_narrativo: {e}")
         return []
 
 
@@ -244,11 +252,26 @@ def main():
                 if not entidades:
                     entidades = _generar_enemigo_narrativo(user_input, resumen)
                 if entidades:
-                    narrador_msg(narrador(f"[SISTEMA] El jugador intenta atacar. Acción: '{user_input}'. Narra brevemente cómo irrumpe el enfrentamiento."))
                     resultado = combate_natural(entidades)
+
+                    # Actualizar el resumen con lo que ocurrió en el combate
+                    nombres_derrotados = ", ".join(e['nombre'] for e in entidades)
+                    resumen_combate = (
+                        f"El jugador inició un combate inesperado contra {nombres_derrotados} y "
+                        f"{'venció, eliminándoles.' if resultado == 'victoria' else 'fue derrotado.'}"
+                    )
+                    RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+                    with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
+                        f.write(resumen_combate + "\n")
+
                     if resultado == "derrota":
                         break
-                    narrador_msg(narrador("[SISTEMA] El jugador acaba de terminar un enfrentamiento inesperado. Narra las consecuencias y continúa la historia."))
+
+                    narrador_msg(narrador(
+                        f"[SISTEMA] El jugador acaba de derrotar en combate a: {nombres_derrotados}. "
+                        f"Esas criaturas/personajes han muerto y ya no están presentes. "
+                        f"Narra las consecuencias de la victoria y continúa la historia."
+                    ))
                     continue
 
             narrador_msg(narrador(user_input))
