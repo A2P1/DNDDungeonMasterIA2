@@ -3,12 +3,13 @@ from agentes.director import generar_campaña, campaña_existe, cargar_campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
 from agentes.combate_natural import combate_natural
+from agentes.creador_personaje import crear_personaje, personaje_existe
 from tools.campana import get_siguiente_beat, marcar_beat_completado
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERATURE_LOGICA
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, MODEL_NAME, TEMPERATURE_LOGICA
 from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg,
                 sistema_msg, titulo_msg, prompt_jugador, prompt_input)
 import json
@@ -27,12 +28,17 @@ def _nueva_campaña():
     campaña = generar_campaña(tema, personaje)
     titulo_msg(f"¡Campaña '{campaña['titulo']}' creada!")
     narrador_msg(f"Gancho: {campaña['gancho']}")
+
+    sistema_msg("Generando ficha de personaje...")
+    stats = crear_personaje(personaje)
+    sistema_msg(f"Personaje creado: {stats['nombre']} ({stats.get('raza', '')} {stats['clase']}) — HP: {stats['vida_max']} | AC: {stats['ac']} | Arma: {stats['arma']['nombre']}")
+
     return campaña
 
 
 def _limpiar_partida():
     """Borra los archivos de la partida anterior para empezar de cero."""
-    for path in [CAMPAIGN_PATH, ENTIDADES_PATH]:
+    for path in [CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH]:
         if path.exists():
             path.unlink()
     # Vaciar resumen (crear directorio si no existe)
@@ -55,6 +61,11 @@ def iniciar_campaña():
             campaña = _nueva_campaña()
         else:
             sistema_msg("Continuando partida...")
+            if not personaje_existe():
+                sistema_msg("No se encontró ficha de personaje.")
+                desc = prompt_input("Describe tu personaje para regenerar la ficha (ej: Thorin, enano guerrero)")
+                stats = crear_personaje(desc)
+                sistema_msg(f"Ficha regenerada: {stats['nombre']} ({stats.get('raza', '')} {stats['clase']})")
     else:
         campaña = _nueva_campaña()
 
