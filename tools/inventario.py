@@ -29,27 +29,31 @@ def get_armas(jugador: dict) -> list:
     return [item for item in jugador.get("inventario", []) if item.get("tipo") == "arma"]
 
 
-def detectar_arma_en_accion(accion: str, armas: list) -> dict | None:
-    """Detecta si el jugador menciona alguna de sus armas en la acción.
+def verificar_arma_en_accion(accion: str, armas: list) -> dict:
+    """Detecta si el jugador menciona un arma en su acción y verifica si la tiene.
 
-    Hace una búsqueda flexible (ej: 'espada' coincide con 'espada larga').
-
-    Returns:
-        El dict del arma si se menciona y existe en inventario, None si no se menciona.
+    Returns dict con:
+      estado: "encontrada" | "no_en_inventario" | "no_mencionada"
+      arma:   dict del arma si encontrada, None en otro caso
+      nombre: nombre que dijo el jugador, None si no mencionó ninguna
     """
     if not armas:
-        return None
+        return {"estado": "no_mencionada", "arma": None, "nombre": None}
 
     nombres = [a["nombre"] for a in armas]
 
     respuesta = _llm.invoke([
         SystemMessage(content=(
             "Eres un detector de armas en acciones de combate de rol. "
-            "Dado el inventario de armas del jugador y su acción, determina si menciona alguna. "
+            "Dado el inventario de armas del jugador y su acción, determina:\n"
+            "1. ¿El jugador menciona usar algún arma específica?\n"
+            "2. Si menciona un arma, ¿está en el inventario? "
             "Busca coincidencias flexibles: 'espada' coincide con 'espada larga', "
-            "'el hacha' con 'hacha de guerra', 'mi daga' con 'daga', etc. "
+            "'el hacha' con 'hacha de guerra', 'mi daga' con 'daga', etc.\n"
             "Responde SOLO con JSON válido, sin texto extra:\n"
-            '{"arma_mencionada": "<nombre exacto del inventario>" | null}'
+            '{"arma_mencionada": "<nombre exacto del inventario si coincide, '
+            'o el nombre que dijo el jugador si no coincide, o null si no menciona ninguna>", '
+            '"en_inventario": true | false}'
         )),
         HumanMessage(content=f"Armas en inventario: {nombres}\nAcción del jugador: {accion}")
     ])
@@ -60,9 +64,18 @@ def detectar_arma_en_accion(accion: str, armas: list) -> dict | None:
         if match:
             contenido = match.group(1).strip()
         resultado = json.loads(contenido)
+
         nombre = resultado.get("arma_mencionada")
-        if nombre:
-            return next((a for a in armas if a["nombre"].lower() == nombre.lower()), None)
-        return None
+        en_inventario = resultado.get("en_inventario", False)
+
+        if not nombre:
+            return {"estado": "no_mencionada", "arma": None, "nombre": None}
+
+        if en_inventario:
+            arma = next((a for a in armas if a["nombre"].lower() == nombre.lower()), None)
+            if arma:
+                return {"estado": "encontrada", "arma": arma, "nombre": nombre}
+
+        return {"estado": "no_en_inventario", "arma": None, "nombre": nombre}
     except Exception:
-        return None
+        return {"estado": "no_mencionada", "arma": None, "nombre": None}
