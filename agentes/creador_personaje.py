@@ -48,8 +48,32 @@ Responde SOLO con JSON válido, sin texto extra, con esta estructura exacta:
   "arma": {
     "nombre": "<arma principal coherente con la clase>",
     "dado_daño": "<dado estándar: 1d4, 1d6, 1d8, 1d10>"
-  }
-}"""
+  },
+  "inventario": [
+    {
+      "nombre": "<arma principal>",
+      "tipo": "arma",
+      "dado_daño": "<dado estándar>",
+      "descripcion": "<descripción breve>"
+    },
+    {
+      "nombre": "<arma secundaria coherente con la clase>",
+      "tipo": "arma",
+      "dado_daño": "<dado estándar>",
+      "descripcion": "<descripción breve>"
+    },
+    {
+      "nombre": "poción de cura",
+      "tipo": "objeto",
+      "efecto": "recupera 2d4 HP",
+      "descripcion": "Líquido rojizo que restaura vitalidad"
+    }
+  ]
+}
+
+El inventario debe tener al menos 2 armas y 1 objeto. Las armas deben ser coherentes con
+la clase y raza del personaje (ej: un guerrero lleva espada larga y daga; un mago lleva
+bastón y daga; un pícaro lleva daga y arco corto)."""
 
 
 def crear_personaje(descripcion: str) -> dict:

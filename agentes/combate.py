@@ -9,8 +9,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from tools.entidades import dañar_enemigo, get_enemigos_beat, get_estado_combate, get_info_entidad
 from tools.dados import tirar_d20, tirar_dado
+from tools.inventario import get_armas, detectar_arma_en_accion
 from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME
-from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador
+from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg
 
 load_dotenv()
 
@@ -92,6 +93,8 @@ def combate(beat_id: str) -> str:
     if not enemigos:
         return "victoria"
 
+    arma_turno = None  # Arma elegida por el jugador, persiste entre turnos
+
     # Narrar inicio
     nombres = ", ".join(f"{e['nombre']} (AC:{e['ac']}, HP:{e['vida_actual']})" for e in enemigos)
     arma_jugador = jugador.get("arma", {}).get("nombre", "sus puños")
@@ -132,6 +135,26 @@ def combate(beat_id: str) -> str:
             continue
 
         tipo = evaluacion.get("tipo", "accion")
+
+        # === VERIFICACIÓN DE ARMA (solo para ataques) ===
+        if tipo == "ataque" and evaluacion.get("viable", False):
+            armas_inv = get_armas(jugador)
+            if armas_inv:
+                arma_detectada = detectar_arma_en_accion(accion, armas_inv)
+                if arma_detectada:
+                    arma_turno = arma_detectada
+                elif arma_turno is None:
+                    nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
+                    sistema_msg(f"¿Con qué arma atacas? Tienes: {nombres_armas}")
+                    eleccion = prompt_jugador()
+                    arma_turno = detectar_arma_en_accion(eleccion, armas_inv)
+                    if arma_turno is None:
+                        combate_msg(_narrar(f"El jugador no especifica un arma válida. No puede atacar así."))
+                        continue
+                # Usar el dado_daño real del arma elegida
+                evaluacion["dado_daño"] = arma_turno.get("dado_daño", evaluacion.get("dado_daño", "1d6"))
+                jugador["arma"] = arma_turno
+
         atributo = evaluacion.get("atributo", "fue")
         dc = evaluacion.get("dc", 12)
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 10))
