@@ -9,8 +9,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from tools.entidades import dañar_enemigo, get_enemigos_beat, get_estado_combate, get_info_entidad
 from tools.dados import tirar_d20, tirar_dado
+from tools.inventario import get_armas, verificar_arma_en_accion
 from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME
-from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador
+from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg
 
 load_dotenv()
 
@@ -92,6 +93,8 @@ def combate(beat_id: str) -> str:
     if not enemigos:
         return "victoria"
 
+    arma_turno = None  # Arma elegida por el jugador, persiste entre turnos
+
     # Narrar inicio
     nombres = ", ".join(f"{e['nombre']} (AC:{e['ac']}, HP:{e['vida_actual']})" for e in enemigos)
     arma_jugador = jugador.get("arma", {}).get("nombre", "sus puños")
@@ -115,10 +118,26 @@ def combate(beat_id: str) -> str:
         if not enemigos_vivos:
             break
 
-        # Construir contexto para el LLM evaluador
+        # === PRE-CHECK DE ARMA (antes de evaluar la acción) ===
+        armas_inv = get_armas(jugador)
+        if armas_inv:
+            verificacion = verificar_arma_en_accion(accion, armas_inv)
+            if verificacion["estado"] == "no_en_inventario":
+                nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
+                combate_msg(_narrar(
+                    f"El jugador intenta usar '{verificacion['nombre']}' pero no lo tiene. "
+                    f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma."
+                ))
+                continue
+            elif verificacion["estado"] == "encontrada":
+                arma_turno = verificacion["arma"]
+                jugador["arma"] = arma_turno
+
+        # Construir contexto con el arma correcta
+        arma_actual = arma_turno or jugador.get("arma", {})
         contexto = (
             f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
-            f"Arma: {arma_jugador} (dado: {jugador.get('arma', {}).get('dado_daño', '1d6')}), "
+            f"Arma: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')}), "
             f"Atributos: {json.dumps(jugador.get('atributos', {}))}\n"
             f"Enemigos vivos: {json.dumps(enemigos_vivos, ensure_ascii=False)}"
         )
@@ -132,6 +151,24 @@ def combate(beat_id: str) -> str:
             continue
 
         tipo = evaluacion.get("tipo", "accion")
+
+        # Si es ataque y aún no hay arma elegida, pedirla ahora
+        if tipo == "ataque" and armas_inv and arma_turno is None:
+            nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
+            sistema_msg(f"¿Con qué arma atacas? Tienes: {nombres_armas}")
+            eleccion = prompt_jugador()
+            v2 = verificar_arma_en_accion(eleccion, armas_inv)
+            if v2["estado"] == "encontrada":
+                arma_turno = v2["arma"]
+                jugador["arma"] = arma_turno
+            else:
+                combate_msg(f"No tienes esa arma. Armas disponibles: {nombres_armas}")
+                continue
+
+        # Usar el dado_daño real del arma elegida
+        if arma_turno:
+            evaluacion["dado_daño"] = arma_turno.get("dado_daño", evaluacion.get("dado_daño", "1d6"))
+
         atributo = evaluacion.get("atributo", "fue")
         dc = evaluacion.get("dc", 12)
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 10))

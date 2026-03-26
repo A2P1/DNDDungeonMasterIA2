@@ -184,7 +184,7 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list:
         # Extraer JSON aunque venga envuelto en bloques markdown ```json ... ```
         import re
         contenido = respuesta.content
-        match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido)
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido) #Extrae el contenido del JSON incluyendo saltos de línea, espacios y no espacios para leer el JSON 
         if match:
             contenido = match.group(1).strip()
 
@@ -246,10 +246,10 @@ def main():
             if user_input.lower() == "salir":
                 break
 
-            # Detectar si el jugador quiere atacar fuera de un beat de combate
-            if _detectar_intento_ataque(user_input, resumen):
+            # Detecta si el jugador quiere atacar fuera de un beat de combate
+            if _detectar_intento_ataque(user_input, resumen): # Le pasamos la decisión del jugador y el resumen de la partida
                 entidades = _get_entidades_presentes()
-                if not entidades:
+                if not entidades: 
                     entidades = _generar_enemigo_narrativo(user_input, resumen)
                 if entidades:
                     resultado = combate_natural(entidades)

@@ -12,6 +12,7 @@ DIRECTOR_PROMPT_PATH = ROOT / "prompts" / "director.txt"
 CAMPAIGN_PATH = ROOT / "data" / "campaign.json"
 ENTIDADES_PATH = ROOT / "data" / "entidades.json"
 ENRIQUECEDOR_PROMPT_PATH = ROOT / "prompts" / "enriquecedor.txt"
+CREADOR_PERSONAJE_PROMPT_PATH = ROOT / "prompts" / "creador_personaje.txt"
 
 # Configuración del modelo
 MODEL_NAME = "gpt-4o"

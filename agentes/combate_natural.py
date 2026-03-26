@@ -9,8 +9,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad
 from tools.dados import tirar_d20, tirar_dado
+from tools.inventario import get_armas, verificar_arma_en_accion
 from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME # Las rutas alos ficheros de stats, prompt de comabte y el modelo de ChatGPT
-from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador
+from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg
 
 load_dotenv()
 
@@ -90,6 +91,8 @@ def combate_out(entidades_presentes: list) -> str:
     if not entidades_presentes: # Si no hay entidades presentes, devuelve una victoria
         return "victoria"
 
+    arma_turno = None  # Arma elegida por el jugador, persiste entre turnos
+
     # Si sí hay entidades presentes, primero guardamos el nombre, el AC y la vida actual de cada entidad presente
     nombres = ", ".join(
         f"{e['nombre']} (AC:{e.get('ac', 10)}, HP:{e.get('vida_actual', '?')})"
@@ -116,9 +119,26 @@ def combate_out(entidades_presentes: list) -> str:
         if not vivos: # Si no quedan entidades vivas, se termina el combate
             break
 
+        # === PRE-CHECK DE ARMA (antes de evaluar la acción) ===
+        armas_inv = get_armas(jugador)
+        if armas_inv:
+            verificacion = verificar_arma_en_accion(accion, armas_inv)
+            if verificacion["estado"] == "no_en_inventario":
+                nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
+                combate_msg(_narrar(
+                    f"El jugador intenta usar '{verificacion['nombre']}' pero no lo tiene. "
+                    f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma."
+                ))
+                continue
+            elif verificacion["estado"] == "encontrada":
+                arma_turno = verificacion["arma"]
+                jugador["arma"] = arma_turno
+
+        # Construir contexto con el arma correcta
+        arma_actual = arma_turno or jugador.get("arma", {})
         contexto = (
             f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
-            f"Arma: {arma_jugador} (dado: {jugador.get('arma', {}).get('dado_daño', '1d6')}), "
+            f"Arma: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')}), "
             f"Atributos: {json.dumps(jugador.get('atributos', {}))}\n"
             f"Entidades presentes (vivas): {json.dumps(vivos, ensure_ascii=False)}"
         )
@@ -135,14 +155,31 @@ def combate_out(entidades_presentes: list) -> str:
             combate_msg(_narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}"))
             continue
 
-        tipo = evaluacion.get("tipo", "accion")# Tipo de acción (ataque o huída), si no se declara, se intuye que es ataque
-        atributo = evaluacion.get("atributo", "fue")# Atributo empleado en el ataque, si no se tiene claro, se empleará la fuerza
-        dc = evaluacion.get("dc", 12)# Dado empleado para el ataque, si no se especifica, se declara como 12 
-        mod = _modificador(jugador.get("atributos", {}).get(atributo, 0)) # Modificador de daño
+        tipo = evaluacion.get("tipo", "accion")
 
-        # Método de tirada de dados: d20 --> acierta? Sí --> Tiramos otro dado para calcular el daño hecho
-        tirada = tirar_d20.invoke({}) # Llamamos a la tool de tirar un dado de 20 caras
-        critico = (tirada == 20 and tipo == "ataque") # Si sacamos un 20 en un ataque, será un crítico
+        # Si es ataque y aún no hay arma elegida, pedirla ahora
+        if tipo == "ataque" and armas_inv and arma_turno is None:
+            nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
+            sistema_msg(f"¿Con qué arma atacas? Tienes: {nombres_armas}")
+            eleccion = prompt_jugador()
+            v2 = verificar_arma_en_accion(eleccion, armas_inv)
+            if v2["estado"] == "encontrada":
+                arma_turno = v2["arma"]
+                jugador["arma"] = arma_turno
+            else:
+                combate_msg(f"No tienes esa arma. Armas disponibles: {nombres_armas}")
+                continue
+
+        # Usar el dado_daño real del arma elegida
+        if arma_turno:
+            evaluacion["dado_daño"] = arma_turno.get("dado_daño", evaluacion.get("dado_daño", "1d6"))
+
+        atributo = evaluacion.get("atributo", "fue")
+        dc = evaluacion.get("dc", 12)
+        mod = _modificador(jugador.get("atributos", {}).get(atributo, 0))
+
+        tirada = tirar_d20.invoke({})
+        critico = (tirada == 20 and tipo == "ataque")
         total = tirada + mod
 
         if critico or total >= dc:# Si el ataque acierta, se calcula cuánto daño hace el jugador
