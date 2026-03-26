@@ -25,7 +25,7 @@ def get_inventario() -> str:
 
 
 def get_armas(jugador: dict) -> list:
-    """Devuelve solo los items de tipo 'arma' del inventario del jugador."""
+    # Devuelve las objetos de inventario que son tipo arma (cuchillos, dagas, espadas...)
     return [item for item in jugador.get("inventario", []) if item.get("tipo") == "arma"]
 
 
