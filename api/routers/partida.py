@@ -8,20 +8,20 @@ router = APIRouter(
 
 
 @router.get("/estado", response_model=EstadoPartidaResponse)
-def get_estado_partida(): # Devuelve el estado actual de la partida
+def get_estado_partida(): # Devuelve el beat en curso, el resumen y si la campaña ha terminado
     pass
 
 
 @router.get("/resumen")
-def get_resumen(): # Devuelve el resumen de la historia hasta el momento
+def get_resumen(): # Devuelve el resumen narrativo acumulado hasta ahora
     pass
 
 
 @router.post("/accion", response_model=RespuestaNarradorResponse)
-def enviar_accion(body: AccionJugadorRequest): # Recibe la acción del jugador y se la pasa al narrador, pero si es combate se pasa al agente combate
+def enviar_accion(body: AccionJugadorRequest): # Recibe la acción del jugador, si es ataque va a combate, si no al narrador
     pass
 
 
 @router.post("/iniciar", response_model=RespuestaNarradorResponse)
-def iniciar_partida(): # Inicia la partida desde el principio
+def iniciar_partida(): # Inicia la partida desde el principio, solo se llama la primera vez
     pass

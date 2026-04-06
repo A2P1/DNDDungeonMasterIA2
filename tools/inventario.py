@@ -25,17 +25,14 @@ def get_inventario() -> str:
 
 
 def get_armas(jugador: dict) -> list:
-    # Devuelve las objetos de inventario que son tipo arma (cuchillos, dagas, espadas...)
+    """Devuelve las armas que tiene el jugador en su inventario"""
     return [item for item in jugador.get("inventario", []) if item.get("tipo") == "arma"]
 
 
 def verificar_arma_en_accion(accion: str, armas: list) -> dict:
-    """Detecta si el jugador menciona un arma en su acción y verifica si la tiene.
+    """Detecta si el usuario menciona algún arma en su acción de ataque.
+    Por ejemplo: "Le ataco con mi cuchillo" -- Detectar que el arma con la que quiere atacar es el cuchillo
 
-    Returns dict con:
-      estado: "encontrada" | "no_en_inventario" | "no_mencionada"
-      arma:   dict del arma si encontrada, None en otro caso
-      nombre: nombre que dijo el jugador, None si no mencionó ninguna
     """
     if not armas:
         return {"estado": "no_mencionada", "arma": None, "nombre": None}

@@ -8,17 +8,15 @@ router = APIRouter(
 
 
 @router.get("/", response_model=PersonajeResponse)
-def get_personaje(): # Devuelve los datos del personaje
-    """Devuelve la ficha completa del personaje desde stats.json.
-    Si no existe ficha creada, devuelve 404."""
+def get_personaje(): # Devuelve la ficha del personaje, si no existe devuelve 404
     pass
 
 
 @router.post("/", response_model=PersonajeResponse, status_code=201)
-def crear_personaje(body: CrearPersonajeRequest): # Crea un personaje nuevo
+def crear_personaje(body: CrearPersonajeRequest): # Genera la ficha del personaje a partir de su descripción
     pass
 
 
 @router.put("/", response_model=PersonajeResponse)
-def actualizar_personaje(body: PersonajeResponse): # Actualiza los datos del personaje
+def actualizar_personaje(body: PersonajeResponse): # Actualiza los datos del personaje, útil para modificar stats desde el frontend
     pass

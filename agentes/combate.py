@@ -15,7 +15,7 @@ from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_m
 
 load_dotenv()
 
-# Leer prompt de combate
+
 with open(COMBATE_PROMPT_PATH, 'r', encoding='utf-8') as f:
     system_prompt_combate = f.read().strip()
 
@@ -24,25 +24,24 @@ llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
 parser = JsonOutputParser()
 
 
-# === UTILIDADES ===
 
 def _modificador(valor: int) -> int:
     """Devuelve el valor del atributo directamente (sistema 0-5)."""
     return valor
 
-
-def _cargar_jugador() -> dict:
+"""Carga la ficha del jugador con sus estadísticas"""
+def _cargar_jugador() -> dict: 
     if not STATS_PATH.exists():
         return {}
     with open(STATS_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-
+"""Guarda los datos del jugador después de un combate"""
 def _guardar_jugador(jugador: dict):
     with open(STATS_PATH, 'w', encoding='utf-8') as f:
         json.dump(jugador, f, indent=2, ensure_ascii=False)
 
-
+"""Narra lo que sucede en un combate"""
 def _narrar(contexto: str) -> str:
     """LLM narra un evento de combate en modo NARRAR."""
     respuesta = llm.invoke([
@@ -51,7 +50,7 @@ def _narrar(contexto: str) -> str:
     ])
     return respuesta.content
 
-
+"""Evalúa si la acción que quiere realizar el jugador es viable en el contexto actual"""
 def _evaluar_accion(accion: str, contexto_combate: str) -> dict:
     """LLM evalúa cualquier acción del jugador. Devuelve dict con tipo, atributo, dc, etc."""
     respuesta = llm_evaluar.invoke([
@@ -63,7 +62,7 @@ def _evaluar_accion(accion: str, contexto_combate: str) -> dict:
     except Exception:
         return {"viable": False, "razon": "No se pudo interpretar la acción"}
 
-
+"""Muestra el estado actual del combate: vida del jugador, enemigos vivos y su vida."""
 def _mostrar_estado(jugador: dict, beat_id: str):
     """Muestra el estado actual del combate."""
     estado_raw = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
@@ -73,13 +72,10 @@ def _mostrar_estado(jugador: dict, beat_id: str):
     estado_combate(jugador['vida_actual'], jugador['vida_max'], enemigos_str)
 
 
-# === COMBATE PRINCIPAL ===
+
 
 def combate(beat_id: str) -> str:
     """Ejecuta el loop de combate para un beat.
-
-    Returns:
-        "victoria" o "derrota"
     """
     # Cargar enemigos y jugador
     enemigos_raw = get_enemigos_beat.invoke({"beat_id": beat_id})
@@ -93,7 +89,7 @@ def combate(beat_id: str) -> str:
     if not enemigos:
         return "victoria"
 
-    arma_turno = None  # Arma elegida por el jugador, persiste entre turnos
+    arma_turno = None 
 
     # Narrar inicio
     nombres = ", ".join(f"{e['nombre']} (AC:{e['ac']}, HP:{e['vida_actual']})" for e in enemigos)
@@ -105,7 +101,6 @@ def combate(beat_id: str) -> str:
     _mostrar_estado(jugador, beat_id)
 
     while True:
-        # === TURNO DEL JUGADOR ===
         accion = prompt_jugador()
 
         if not accion:
@@ -118,7 +113,7 @@ def combate(beat_id: str) -> str:
         if not enemigos_vivos:
             break
 
-        # === PRE-CHECK DE ARMA (antes de evaluar la acción) ===
+        """Evaluar el arma con el que quiere atacar el jugador"""
         armas_inv = get_armas(jugador)
         if armas_inv:
             verificacion = verificar_arma_en_accion(accion, armas_inv)
@@ -133,7 +128,7 @@ def combate(beat_id: str) -> str:
                 arma_turno = verificacion["arma"]
                 jugador["arma"] = arma_turno
 
-        # Construir contexto con el arma correcta
+        """Se construye el contexto con el arma que quiere utilizar el jugador"""
         arma_actual = arma_turno or jugador.get("arma", {})
         contexto = (
             f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
@@ -142,7 +137,7 @@ def combate(beat_id: str) -> str:
             f"Enemigos vivos: {json.dumps(enemigos_vivos, ensure_ascii=False)}"
         )
 
-        # === TODO pasa por el LLM evaluador ===
+        """Se evalúa la acción"""
         evaluacion = _evaluar_accion(accion, contexto)
 
         if not evaluacion.get("viable", False):
@@ -152,7 +147,7 @@ def combate(beat_id: str) -> str:
 
         tipo = evaluacion.get("tipo", "accion")
 
-        # Si es ataque y aún no hay arma elegida, pedirla ahora
+        """Si el usuario quiere atacar pero no se ha especificado un arma todavía, se pide"""
         if tipo == "ataque" and armas_inv and arma_turno is None:
             nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
             sistema_msg(f"¿Con qué arma atacas? Tienes: {nombres_armas}")
@@ -165,7 +160,6 @@ def combate(beat_id: str) -> str:
                 combate_msg(f"No tienes esa arma. Armas disponibles: {nombres_armas}")
                 continue
 
-        # Usar el dado_daño real del arma elegida
         if arma_turno:
             evaluacion["dado_daño"] = arma_turno.get("dado_daño", evaluacion.get("dado_daño", "1d6"))
 
@@ -173,13 +167,12 @@ def combate(beat_id: str) -> str:
         dc = evaluacion.get("dc", 12)
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 10))
 
-        # Tirada d20 + modificador (usando tool)
+
         tirada = tirar_d20.invoke({})
         critico = (tirada == 20 and tipo == "ataque")
         total = tirada + mod
 
         if critico or total >= dc:
-            # === ÉXITO ===
             dado_daño = evaluacion.get("dado_daño")
 
             if dado_daño:

@@ -135,7 +135,7 @@ def combate_out(entidades_presentes: list) -> str:
                 arma_turno = verificacion["arma"]
                 jugador["arma"] = arma_turno
 
-        # Construimo el contexto con el arma seleccionada
+        # Construimos el contexto con el arma seleccionada
         arma_actual = arma_turno or jugador.get("arma", {})
         contexto = (
             f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
