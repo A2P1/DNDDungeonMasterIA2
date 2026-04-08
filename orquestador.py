@@ -2,7 +2,6 @@ from agentes.Narrador import narrador, narrador_inicio
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
-from agentes.combate_natural import combate_natural
 from agentes.creador_personaje import crear_personaje, personaje_existe
 from tools.campana import get_siguiente_beat, marcar_beat_completado
 from dotenv import load_dotenv
@@ -227,7 +226,11 @@ def main():
             # Transición narrativa: el narrador introduce el combate
             narrador_msg(narrador(f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento."))
 
-            resultado = combate(beat_combate["id"])
+            # Obtenemos las entidades del beat y las pasamos a combate_out como si fuera un combate natural
+            entidades_beat = _get_entidades_presentes()
+            for e in entidades_beat:
+                e["tipo_entidad"] = "enemigo"
+            resultado = combate(entidades_beat)
             marcar_beat_completado.invoke({"beat_id": beat_combate["id"]})
 
             # Transición narrativa post-combate
@@ -252,7 +255,7 @@ def main():
                 if not entidades: 
                     entidades = _generar_enemigo_narrativo(user_input, resumen)
                 if entidades:
-                    resultado = combate_natural(entidades)
+                    resultado = combate(entidades)
 
                     # Actualizar el resumen con lo que ocurrió en el combate
                     nombres_derrotados = ", ".join(e['nombre'] for e in entidades)
