@@ -147,6 +147,33 @@ def _get_entidades_presentes() -> list:
     return presentes
 
 
+def _hay_entidad_atacable(user_input: str, resumen: str) -> bool:
+    """Comprueba si según el contexto narrativo hay alguien presente a quien el jugador pueda atacar.
+    Si no hay nadie cerca, devuelve False para evitar inventarse enemigos de la nada."""
+    respuesta = _llm_detector.invoke([
+        SystemMessage(content=(
+            "Eres un árbitro de un juego de rol. "
+            "Dado el resumen narrativo reciente y la acción del jugador, determina si "
+            "hay alguna entidad (persona, criatura, monstruo) presente en la escena a la que "
+            "el jugador pueda atacar razonablemente. "
+            "No cuenten objetos inanimados como árboles, puertas o paredes. "
+            "Responde SOLO con JSON válido, sin texto extra: "
+            "{\"hay_objetivo\": true} o {\"hay_objetivo\": false}"
+        )),
+        HumanMessage(content=f"Resumen narrativo reciente:\n{resumen}\n\nAcción del jugador: {user_input}")
+    ])
+    try:
+        import re
+        contenido = respuesta.content
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido)
+        if match:
+            contenido = match.group(1).strip()
+        resultado = json.loads(contenido)
+        return bool(resultado.get("hay_objetivo", False))
+    except Exception:
+        return False
+
+
 def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list:
     """Genera stats temporales para un enemigo narrativo (no registrado en entidades.json)
     y lo inserta en entidades.json para que el sistema de combate pueda operar con él."""
@@ -252,7 +279,7 @@ def main():
             # Detecta si el jugador quiere atacar fuera de un beat de combate
             if _detectar_intento_ataque(user_input, resumen): # Le pasamos la decisión del jugador y el resumen de la partida
                 entidades = _get_entidades_presentes()
-                if not entidades: 
+                if not entidades and _hay_entidad_atacable(user_input, resumen):
                     entidades = _generar_enemigo_narrativo(user_input, resumen)
                 if entidades:
                     resultado = combate(entidades)
