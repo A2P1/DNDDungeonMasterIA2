@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from api.schemas import CrearCampañaRequest, CampañaResponse
 from agentes.director import generar_campaña as _generar_campaña, campaña_existe, cargar_campaña
+from agentes.enriquecedor import enriquecer_entidades
 from config import CAMPAIGN_PATH, STATS_PATH, RESUMEN_PATH, ENTIDADES_PATH
 
 router = APIRouter(
@@ -19,6 +20,7 @@ def get_campaña(): # Devuelve la campaña actual, si no existe devuelve 404
 @router.post("/", response_model=CampañaResponse, status_code=201)
 def crear_campaña(body: CrearCampañaRequest): # Crea una nueva campaña con el tema y el personaje
     campaña = _generar_campaña(body.tema, body.personaje)
+    enriquecer_entidades(campaña)
     return campaña
 
 

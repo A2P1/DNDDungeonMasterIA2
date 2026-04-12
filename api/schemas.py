@@ -62,7 +62,8 @@ class EstadoPartidaResponse(BaseModel):
 # SCHEMAS DE COMBATE
 
 class AccionCombateRequest(BaseModel):
-    accion: str  # Lo que hace el jugador en su turno (ej: "Ataco con mi espada larga")
+    beat_id: str  # ID del beat donde ocurre el combate (ej: "b2")
+    accion: str   # Lo que hace el jugador en su turno (ej: "Ataco con mi espada larga")
 
 class EstadoCombateResponse(BaseModel):
     jugador_vida: int
@@ -70,6 +71,7 @@ class EstadoCombateResponse(BaseModel):
     entidades_vivas: list        # Lista de entidades vivas con nombre y vida
     combate_terminado: bool
     resultado: Optional[str]     # "victoria" | "derrota" | None
+    narracion: Optional[str] = None  # Texto narrado del turno (solo en POST /accion)
 
 
 # SCHEMAS DE INVENTARIO
