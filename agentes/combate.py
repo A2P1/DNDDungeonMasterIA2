@@ -23,8 +23,8 @@ llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
 parser = JsonOutputParser() # Sirve para, más adelante, evaluar la acción del jugador y obtener una respuesta estructurada
 
 
-def _modificador(valor: int) -> int: # Calcula el modificador de características de D&D
-    return (valor - 10) // 2
+def _modificador(valor: int) -> int: # El atributo (0-5) se usa directamente como modificador (Cosmere RPG)
+    return valor
 
 
 def _cargar_jugador() -> dict: # Carga la ficha del jugador
@@ -190,17 +190,31 @@ def combate(entidades_presentes: list) -> str:
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 0))
 
         tirada = tirar_d20.invoke({}) # Invocamos al dado de 20 caras para saber si golpea o no
-        critico = (tirada == 20 and tipo == "ataque") # Si saca la cara 20 en un ataque hace un crítico
-        total = tirada + mod # El ataque final es el resultado del daño del dado junto al modificador de daño
+        critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
+        pifia = (tirada == 1) # Nat 1 = fallo automático con complicación
+        total = tirada + mod
 
-        if critico or total >= dc:# Si el ataque acierta, se calcula cuánto daño hace el jugador
+        # Nat 1: fallo automático sin importar modificadores
+        if pifia:
+            combate_msg(_narrar(
+                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
+                f"Narra una complicación: el arma se atasca, el jugador tropieza, "
+                f"se golpea a sí mismo o queda expuesto."
+            ))
+        elif critico or total >= dc:# Si el ataque acierta, se calcula cuánto daño hace el jugador
             dado_daño = evaluacion.get("dado_daño")# Comprobamos si se puede hacer daño
             objetivo_id = evaluacion.get("objetivo")# Buscamos el id del objetivo en la escena, tanto enemigo como NPC
 
-            if dado_daño: # Si se puede hacer daño, tiramos el dado de daño correspondiente al arma que se esté empleando
-                daño = tirar_dado.invoke({"dado": dado_daño}) + mod # Le añadimos el modificador de daño
-                if critico: # Si ha sido crítico, tiramos otro dado de daño para añadirlo al total de daño realizado
-                    daño += tirar_dado.invoke({"dado": dado_daño})
+            if dado_daño: # Si se puede hacer daño
+                if critico:
+                    # Crítico: todos los dados al máximo + modificador (Cosmere RPG)
+                    partes = dado_daño.lower().split("d")
+                    cantidad = int(partes[0])
+                    caras = int(partes[1])
+                    daño = (cantidad * caras) + mod
+                else:
+                    daño = tirar_dado.invoke({"dado": dado_daño}) + mod
                 daño = max(1, daño)
 
                 if objetivo_id: 

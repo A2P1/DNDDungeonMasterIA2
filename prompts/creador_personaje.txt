@@ -5,6 +5,9 @@ de estadísticas coherente con esa descripción.
 Usa la escala de atributos 0-5 donde:
   0 = muy bajo, 2 = promedio, 3 = bueno, 4 = muy bueno, 5 = excepcional
 
+El valor del atributo se suma directamente a las tiradas (d20 + atributo vs DC/AC).
+Un guerrero con fue 4 suma +4 al ataque. Ten esto en cuenta para equilibrar la ficha.
+
 Clases y sus puntos fuertes típicos:
 - Guerrero/Bárbaro: fue alto (4-5), con alto, des medio
 - Ladrón/Pícaro: des alto (4-5), car medio, fue bajo-medio
