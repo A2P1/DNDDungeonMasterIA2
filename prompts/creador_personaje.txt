@@ -33,31 +33,37 @@ Responde SOLO con JSON válido, sin texto extra, con esta estructura exacta:
     "car": <0-5>
   },
   "arma": {
-    "nombre": "<arma principal coherente con la clase>",
-    "dado_daño": "<dado estándar: 1d4, 1d6, 1d8, 1d10>"
+    "nombre": "<arma principal del catálogo>",
+    "dado_daño": "<dado del catálogo>",
+    "atributo": "<atributo del catálogo>",
+    "tipo": "<tipo del catálogo>"
   },
   "inventario": [
     {
-      "nombre": "<arma principal>",
+      "nombre": "<arma principal del catálogo>",
       "tipo": "arma",
-      "dado_daño": "<dado estándar>",
-      "descripcion": "<descripción breve>"
+      "dado_daño": "<dado del catálogo>",
+      "atributo": "<atributo del catálogo>",
+      "descripcion": "<descripción del catálogo>"
     },
     {
-      "nombre": "<arma secundaria coherente con la clase>",
+      "nombre": "<arma secundaria del catálogo>",
       "tipo": "arma",
-      "dado_daño": "<dado estándar>",
-      "descripcion": "<descripción breve>"
+      "dado_daño": "<dado del catálogo>",
+      "atributo": "<atributo del catálogo>",
+      "descripcion": "<descripción del catálogo>"
     },
     {
       "nombre": "poción de cura",
-      "tipo": "objeto",
+      "tipo": "consumible",
       "efecto": "recupera 2d4 HP",
       "descripcion": "Líquido rojizo que restaura vitalidad"
     }
   ]
 }
 
-El inventario debe tener al menos 1 arma y 1 objeto de curación. Las armas deben ser coherentes con
-la clase y raza del personaje (ej: un guerrero lleva espada larga y daga; un mago lleva
-bastón y daga; un pícaro lleva daga y arco corto).
+REGLAS DE INVENTARIO:
+- Las armas del personaje DEBEN elegirse del catálogo de armas proporcionado. No inventes armas nuevas.
+- Elige armas coherentes con la clase (guerrero: armas de fue; pícaro: armas de des; mago: armas mágicas/int).
+- El inventario debe tener al menos 1 arma y 1 objeto de curación.
+- Copia el nombre, dado_daño, atributo y tipo exactos del catálogo.

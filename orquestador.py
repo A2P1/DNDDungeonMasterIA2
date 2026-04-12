@@ -4,6 +4,8 @@ from agentes.enriquecedor import enriquecer_entidades, entidades_existen
 from agentes.combate import combate
 from agentes.creador_personaje import crear_personaje, personaje_existe
 from tools.campana import get_siguiente_beat, marcar_beat_completado
+from tools.inventario import add_item_to_inventory
+from tools.entidades import get_info_entidad
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -29,7 +31,7 @@ def _nueva_campaña():
     narrador_msg(f"Gancho: {campaña['gancho']}")
 
     sistema_msg("Generando ficha de personaje...")
-    stats = crear_personaje(personaje)
+    stats = crear_personaje(personaje, campaña)
     sistema_msg(f"Personaje creado: {stats['nombre']} ({stats.get('raza', '')} {stats['clase']}) — HP: {stats['vida_max']} | AC: {stats['ac']} | Arma: {stats['arma']['nombre']}")
 
     return campaña
@@ -63,7 +65,7 @@ def iniciar_campaña():
             if not personaje_existe():
                 sistema_msg("No se encontró ficha de personaje.")
                 desc = prompt_input("Describe tu personaje para regenerar la ficha (ej: Thorin, enano guerrero)")
-                stats = crear_personaje(desc)
+                stats = crear_personaje(desc, campaña)
                 sistema_msg(f"Ficha regenerada: {stats['nombre']} ({stats.get('raza', '')} {stats['clase']})")
     else:
         campaña = _nueva_campaña()
@@ -240,6 +242,32 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list:
         return []
 
 
+def _recoger_loot(entidades: list) -> list:
+    """Recoge el loot de las entidades derrotadas y lo añade al inventario del jugador.
+    Devuelve la lista de items recogidos."""
+    items_recogidos = []
+    for e in entidades:
+        # Obtener la info actualizada de la entidad (puede tener loot)
+        info_raw = get_info_entidad.invoke({"entidad_id": e["id"]})
+        try:
+            info = json.loads(info_raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        if info.get("estado") != "muerto":
+            continue
+
+        for item in info.get("loot", []):
+            add_item_to_inventory.invoke({"item_json": json.dumps(item, ensure_ascii=False)})
+            items_recogidos.append(item)
+
+    if items_recogidos:
+        nombres = ", ".join(i["nombre"] for i in items_recogidos)
+        sistema_msg(f"Loot recogido: {nombres}")
+
+    return items_recogidos
+
+
 def main():
     load_dotenv()
 
@@ -262,7 +290,9 @@ def main():
 
             # Transición narrativa post-combate
             if resultado == "victoria":
-                texto = narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Narra las consecuencias de la victoria y guía hacia lo que viene después.")
+                loot = _recoger_loot(entidades_beat)
+                loot_str = ", ".join(i["nombre"] for i in loot) if loot else "nada útil"
+                texto = narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Ha recogido: {loot_str}. Narra las consecuencias de la victoria y guía hacia lo que viene después.")
                 victoria_msg(texto)
             else:
                 texto = narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída.")
@@ -297,9 +327,12 @@ def main():
                     if resultado == "derrota":
                         break
 
+                    loot = _recoger_loot(entidades)
+                    loot_str = ", ".join(i["nombre"] for i in loot) if loot else "nada útil"
                     narrador_msg(narrador(
                         f"[SISTEMA] El jugador acaba de derrotar en combate a: {nombres_derrotados}. "
                         f"Esas criaturas/personajes han muerto y ya no están presentes. "
+                        f"Ha recogido: {loot_str}. "
                         f"Narra las consecuencias de la victoria y continúa la historia."
                     ))
                     continue

@@ -24,6 +24,78 @@ def get_inventario() -> str:
     return json.dumps(stats.get("inventario", []), ensure_ascii=False, indent=2)
 
 
+@tool
+def add_item_to_inventory(item_json: str) -> str:
+    """Añade un item al inventario del jugador. Recibe un JSON string con el item.
+    Estructura del item: {"nombre": "...", "tipo": "arma|consumible|objeto", "dado_daño": "..." (si arma), "efecto": "..." (si consumible), "descripcion": "..."}.
+    Útil para loot de enemigos, recompensas de NPCs o items encontrados en el mundo."""
+    if not STATS_PATH.exists():
+        return "Error: no hay ficha de jugador"
+    try:
+        item = json.loads(item_json) if isinstance(item_json, str) else item_json
+    except (json.JSONDecodeError, TypeError):
+        return "Error: JSON del item no válido"
+
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        stats = json.load(f)
+
+    if "inventario" not in stats:
+        stats["inventario"] = []
+
+    stats["inventario"].append(item)
+
+    with open(STATS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, indent=2, ensure_ascii=False)
+
+    return f"'{item['nombre']}' añadido al inventario."
+
+
+@tool
+def usar_item(nombre_item: str) -> str:
+    """Usa un item consumible del inventario (ej: poción de cura).
+    Lo elimina del inventario y devuelve su efecto para que el narrador lo aplique.
+    Si el item recupera HP, se aplica automáticamente."""
+    if not STATS_PATH.exists():
+        return "Error: no hay ficha de jugador"
+
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        stats = json.load(f)
+
+    inventario = stats.get("inventario", [])
+    item_idx = None
+    for i, item in enumerate(inventario):
+        if item["nombre"].lower() == nombre_item.lower() and item.get("tipo") == "consumible":
+            item_idx = i
+            break
+
+    if item_idx is None:
+        return f"No tienes '{nombre_item}' en el inventario o no es un item consumible."
+
+    item = inventario.pop(item_idx)
+    efecto = item.get("efecto", "sin efecto conocido")
+
+    # Si el efecto menciona recuperar HP, tiramos el dado y lo aplicamos
+    hp_recuperado = 0
+    if "HP" in efecto.upper() or "hp" in efecto.lower():
+        import re as _re
+        match = _re.search(r'(\d+)d(\d+)', efecto)
+        if match:
+            from tools.dados import tirar_dado
+            hp_recuperado = tirar_dado.invoke({"dado": match.group(0)})
+            stats["vida_actual"] = min(
+                stats.get("vida_max", stats["vida_actual"]),
+                stats["vida_actual"] + hp_recuperado
+            )
+
+    with open(STATS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, indent=2, ensure_ascii=False)
+
+    if hp_recuperado > 0:
+        return (f"Usas '{item['nombre']}'. Recuperas {hp_recuperado} HP. "
+                f"Vida: {stats['vida_actual']}/{stats['vida_max']}")
+    return f"Usas '{item['nombre']}'. Efecto: {efecto}"
+
+
 def get_armas(jugador: dict) -> list:
     # Devuelve las objetos de inventario que son tipo arma (cuchillos, dagas, espadas...)
     return [item for item in jugador.get("inventario", []) if item.get("tipo") == "arma"]

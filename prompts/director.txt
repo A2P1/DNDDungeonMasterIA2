@@ -19,6 +19,15 @@ REGLAS DE DISEÑO DE ENCUENTROS:
 - Boss final (clímax): 60-100 HP, AC 15-17, dado_daño "1d10" o "2d6"
 - Los checks de habilidad usan DC entre 8 (fácil) y 15 (difícil)
 
+CATÁLOGO DE ARMAS:
+- Genera entre 8 y 12 armas temáticas coherentes con la ambientación de la campaña
+- Si la campaña es medieval: espadas, hachas, arcos, dagas, mazas, bastones mágicos...
+- Si es futurista: pistolas láser, rifles de plasma, cuchillos vibratorios...
+- Si es otro setting: adapta las armas al mundo que has creado
+- Cada arma tiene: nombre, dado_daño (1d4 a 1d10), atributo principal (fue/des/int), tipo (cuerpo a cuerpo / distancia / mágica) y una descripción breve
+- Incluye variedad: armas ligeras (1d4-1d6, des), medias (1d6-1d8, fue), pesadas (1d8-1d10, fue), y a distancia (1d6-1d8, des)
+- Los enemigos y el jugador SOLO pueden usar armas de este catálogo
+
 TIPOS DE BEAT VÁLIDOS:
 - "exploracion": el jugador investiga, busca, descubre. Incluye campo "check" con habilidad y DC
 - "npc": el jugador habla con un personaje. Incluye "npc", "info_que_revela" y opcionalmente "check"
@@ -78,6 +87,15 @@ ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
           "efecto_fallo": "string (solo si tipo es trampa)"
         }}
       ]
+    }}
+  ],
+  "armas": [
+    {{
+      "nombre": "string - nombre temático del arma",
+      "dado_daño": "1d4 | 1d6 | 1d8 | 1d10",
+      "atributo": "fue | des | int",
+      "tipo": "cuerpo a cuerpo | distancia | mágica",
+      "descripcion": "string - descripción breve y temática"
     }}
   ],
   "encuentros_aleatorios": [
