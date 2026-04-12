@@ -2,7 +2,3 @@
 langchain-openai==1.1.9
 langchain-core==1.2.13
 python-dotenv==1.2.1
-
-# API REST
-fastapi>=0.111.0       # Framework para construir la API REST
-uvicorn>=0.29.0        # Servidor ASGI para ejecutar FastAPI
