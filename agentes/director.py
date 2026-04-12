@@ -44,6 +44,7 @@ def generar_campaña(tema: str, personaje: str) -> dict:
         "personaje": personaje
     })
 
+    CAMPAIGN_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(CAMPAIGN_PATH, 'w', encoding='utf-8') as f:
         json.dump(campaña, f, indent=2, ensure_ascii=False)
 

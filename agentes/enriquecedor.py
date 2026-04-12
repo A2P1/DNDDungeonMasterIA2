@@ -87,6 +87,7 @@ def enriquecer_entidades(campaña: dict) -> dict:
 
     entidades = chain_enriquecedor.invoke({"entidades_raw": raw_json, "catalogo_armas": catalogo})
 
+    ENTIDADES_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f:
         json.dump(entidades, f, indent=2, ensure_ascii=False)
 
