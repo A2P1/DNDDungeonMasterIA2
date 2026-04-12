@@ -15,10 +15,10 @@ with open(ENRIQUECEDOR_PROMPT_PATH, 'r', encoding='utf-8') as f:
 # Escapar llaves del JSON de ejemplo para que LangChain no las interprete como variables
 system_prompt_escaped = system_prompt.replace("{", "{{").replace("}", "}}")
 
-# Prompt: recibe las entidades raw como JSON string
+# Prompt: recibe las entidades raw y el catálogo de armas como JSON string
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt_escaped),
-    ("human", "Entidades a enriquecer:\n{entidades_raw}")
+    ("human", "Catálogo de armas de la campaña:\n{catalogo_armas}\n\nEntidades a enriquecer:\n{entidades_raw}")
 ])
 
 parser = JsonOutputParser()
@@ -83,8 +83,9 @@ def enriquecer_entidades(campaña: dict) -> dict:
     """
     raw = extraer_entidades_raw(campaña)
     raw_json = json.dumps(raw, indent=2, ensure_ascii=False)
+    catalogo = json.dumps(campaña.get("armas", []), indent=2, ensure_ascii=False)
 
-    entidades = chain_enriquecedor.invoke({"entidades_raw": raw_json})
+    entidades = chain_enriquecedor.invoke({"entidades_raw": raw_json, "catalogo_armas": catalogo})
 
     with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f:
         json.dump(entidades, f, indent=2, ensure_ascii=False)

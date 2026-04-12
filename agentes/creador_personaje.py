@@ -19,14 +19,20 @@ with open(CREADOR_PERSONAJE_PROMPT_PATH, 'r', encoding='utf-8') as f:
 _PROMPT = system_prompt
 
 
-def crear_personaje(descripcion: str) -> dict:
+def crear_personaje(descripcion: str, campaña: dict = None) -> dict:
     """Genera la ficha de stats del jugador a partir de su descripción libre.
 
     Guarda el resultado en data/stats.json y lo devuelve como dict.
+    Si recibe una campaña con catálogo de armas, el personaje elige armas de ahí.
     """
+    contenido_human = f"Descripción del personaje: {descripcion}"
+    if campaña and campaña.get("armas"):
+        catalogo = json.dumps(campaña["armas"], ensure_ascii=False, indent=2)
+        contenido_human += f"\n\nCatálogo de armas disponibles:\n{catalogo}"
+
     respuesta = _llm.invoke([
         SystemMessage(content=_PROMPT),
-        HumanMessage(content=f"Descripción del personaje: {descripcion}")
+        HumanMessage(content=contenido_human)
     ])
 
     import re

@@ -14,7 +14,7 @@ REGLAS:
   - Ágiles/ladrones: des alta
   - Magos/brujos: int o sab altos
   - Líderes/jefes: car alta
-- Asigna un arma temática coherente con la entidad
+- Asigna un arma del catálogo de armas proporcionado. El arma debe ser coherente con la entidad (un bruto usará armas de fue, un arquero armas de des, etc.). Copia el nombre y dado_daño exactos del catálogo
 - Asigna 0-2 habilidades especiales (solo para jefes o entidades únicas)
 - Los NPCs reciben vida_max, ac y disposicion basada en su rol:
   - aliado: disposicion "amistoso"
@@ -34,8 +34,18 @@ ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
       "dado_daño": "1d6",
       "xp": 0,
       "atributos": {{"fue": 0, "des": 0, "con": 0, "int": 0, "sab": 0, "car": 0}},
-      "arma": "string - nombre del arma",
+      "arma": "string - nombre del arma (del catálogo)",
+      "dado_daño": "string - dado de daño del arma (del catálogo)",
       "habilidades": [],
+      "loot": [
+        {{
+          "nombre": "string - item que suelta al morir (arma, poción, objeto)",
+          "tipo": "arma | consumible | objeto",
+          "dado_daño": "string (solo si tipo es arma, del catálogo)",
+          "efecto": "string (solo si tipo es consumible, ej: 'recupera 1d4 HP')",
+          "descripcion": "string"
+        }}
+      ],
       "estado": "vivo"
     }}
   ],

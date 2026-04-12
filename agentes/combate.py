@@ -23,9 +23,8 @@ llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
 parser = JsonOutputParser()
 
 
-def _modificador(valor: int) -> int:
-    """Calcula el modificador de características de D&D."""
-    return (valor - 10) // 2
+def _modificador(valor: int) -> int: # El atributo (0-5) se usa directamente como modificador (Cosmere RPG)
+    return valor
 
 
 def _cargar_jugador() -> dict:
@@ -311,19 +310,33 @@ def combate(entidades_presentes: list) -> str:
         dc = evaluacion.get("dc", 12)
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 0))
 
-        tirada = tirar_d20.invoke({})
-        critico = (tirada == 20 and tipo == "ataque")
+        tirada = tirar_d20.invoke({}) # Invocamos al dado de 20 caras para saber si golpea o no
+        critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
+        pifia = (tirada == 1) # Nat 1 = fallo automático con complicación
         total = tirada + mod
 
-        if critico or total >= dc:
-            dado_daño = evaluacion.get("dado_daño")
-            if dado_daño:
-                daño = tirar_dado.invoke({"dado": dado_daño}) + mod
-                if critico:
-                    daño += tirar_dado.invoke({"dado": dado_daño})
-                daño = max(1, daño)
+        # Nat 1: fallo automático sin importar modificadores
+        if pifia:
+            combate_msg(_narrar(
+                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
+                f"Narra una complicación: el arma se atasca, el jugador tropieza, "
+                f"se golpea a sí mismo o queda expuesto."
+            ))
+        elif critico or total >= dc:# Si el ataque acierta, se calcula cuánto daño hace el jugador
+            dado_daño = evaluacion.get("dado_daño")# Comprobamos si se puede hacer daño
+            objetivo_id = evaluacion.get("objetivo")# Buscamos el id del objetivo en la escena, tanto enemigo como NPC
 
-                objetivo_id = evaluacion.get("objetivo")
+            if dado_daño: # Si se puede hacer daño
+                if critico:
+                    # Crítico: todos los dados al máximo + modificador (Cosmere RPG)
+                    partes = dado_daño.lower().split("d")
+                    cantidad = int(partes[0])
+                    caras = int(partes[1])
+                    daño = (cantidad * caras) + mod
+                else:
+                    daño = tirar_dado.invoke({"dado": dado_daño}) + mod
+                daño = max(1, daño)
                 if objetivo_id:
                     entidad_objetivo = next(
                         (e for e in entidades_presentes if e["id"] == objetivo_id), None
