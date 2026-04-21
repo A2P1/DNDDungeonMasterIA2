@@ -138,6 +138,8 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
     dc = evaluacion.get("dc", 12) # Dificultad que hay que superar con la tirada
     mod = _modificador(jugador.get("atributos", {}).get(atributo, 0)) # Modificador del atributo del jugador
 
+    ventaja_enemigos = False # Se activa si el jugador saca pifia: los enemigos atacarán ese turno con ventaja
+
     # Si el jugador usa un item consumible, se resuelve sin tirada y consume el turno (los enemigos atacan igual más abajo)
     item_name = evaluacion.get("usa_item")
     if item_name:
@@ -153,9 +155,10 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
         total = tirada + mod # Total final de la tirada
 
         if pifia: # Si saca un 1, fallo automático independientemente del modificador
+            ventaja_enemigos = True # El jugador queda expuesto: los enemigos atacan con ventaja este turno
             narracion.append(_narrar(
                 f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
+                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente y el jugador queda expuesto. "
                 f"Narra una complicación: el arma se atasca, el jugador tropieza, "
                 f"se golpea a sí mismo o queda expuesto."
             ))
@@ -219,6 +222,8 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
             atributo_ataque = "fue"
         mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2)) # Modificador del atributo de ataque
         tirada_enemigo = tirar_d20.invoke({}) # El enemigo tira su d20
+        if ventaja_enemigos: # El jugador ha pifiado este turno: los enemigos tiran 2d20 y se quedan la mejor
+            tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
         critico_enemigo = (tirada_enemigo == 20) # Nat 20 = crítico (daño máximo)
         pifia_enemigo = (tirada_enemigo == 1) # Nat 1 = pifia (fallo automático con complicación)
         total_enemigo = tirada_enemigo + mod_enemigo # Total del ataque del enemigo
@@ -348,6 +353,8 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
         dc = evaluacion.get("dc", 12) # Dificultad a superar
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 0)) # Modificador del jugador para ese atributo
 
+        ventaja_enemigos = False # Se activa si el jugador saca pifia: los enemigos atacarán ese turno con ventaja
+
         # Si el jugador usa un item consumible, se resuelve sin tirada y consume el turno (los enemigos atacan igual más abajo)
         item_name = evaluacion.get("usa_item")
         if item_name:
@@ -363,9 +370,10 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             total = tirada + mod
 
             if pifia: # Pifia: fallo automático con complicación narrativa
+                ventaja_enemigos = True # El jugador queda expuesto: los enemigos atacan con ventaja este turno
                 combate_msg(_narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
+                    f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente y el jugador queda expuesto. "
                     f"Narra una complicación: el arma se atasca, el jugador tropieza, "
                     f"se golpea a sí mismo o queda expuesto."
                 ))
@@ -444,6 +452,8 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                 atributo_ataque = "fue"
             mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2)) # Modificador según el atributo de ataque
             tirada_enemigo = tirar_d20.invoke({}) # La entidad tira su d20
+            if ventaja_enemigos: # El jugador ha pifiado este turno: los enemigos tiran 2d20 y se quedan la mejor
+                tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
             critico_enemigo = (tirada_enemigo == 20) # Nat 20 = crítico (daño máximo)
             pifia_enemigo = (tirada_enemigo == 1) # Nat 1 = pifia (fallo automático con complicación)
             total_enemigo = tirada_enemigo + mod_enemigo
