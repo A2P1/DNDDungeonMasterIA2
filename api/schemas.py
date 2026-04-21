@@ -63,6 +63,12 @@ class EstadoPartidaResponse(BaseModel): # Estado general de la partida en un mom
 
 # SCHEMAS DE COMBATE
 
+class IniciarCombateResponse(BaseModel): # Respuesta del POST /combate/iniciar con todo lo que el frontend necesita para arrancar el combate
+    beat_id: str             # ID del beat de combate (ej: "b3"), para usarlo en POST /combate/accion
+    descripcion: str         # Descripción del beat para dar contexto al frontend
+    entidades: list          # Lista de entidades contra las que va a combatir el jugador
+    narracion: str           # Narración de introducción del combate generada por el narrador
+
 class AccionCombateRequest(BaseModel): # Body del POST /combate/accion con el turno del jugador
     beat_id: str  # ID del beat donde ocurre el combate (ej: "b2")
     accion: str   # Lo que hace el jugador en su turno (ej: "Ataco con mi espada larga")
@@ -72,8 +78,9 @@ class EstadoCombateResponse(BaseModel): # Estado del combate tras procesar un tu
     jugador_vida_max: int
     entidades_vivas: list        # Lista de entidades vivas con nombre y vida
     combate_terminado: bool
-    resultado: Optional[str]     # "victoria" | "derrota" | None si el combate sigue
+    resultado: Optional[str]     # "victoria" | "derrota" | "resolucion" | None si el combate sigue
     narracion: Optional[str] = None  # Texto narrado del turno (solo en POST /accion)
+    loot: Optional[list] = None  # Items recogidos de los enemigos muertos (solo cuando resultado == "victoria" o "resolucion")
 
 
 # SCHEMAS DE INVENTARIO
