@@ -181,14 +181,13 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
                 daño = max(1, daño) # El daño mínimo siempre es 1
 
                 objetivo_id = evaluacion.get("objetivo") # ID de la entidad a la que ataca
-                if objetivo_id: # Si el LLM identificó un objetivo concreto, solo le hacemos daño a ese
+                if not objetivo_id and enemigos_vivos: # Si no hay objetivo concreto, atacamos solo al primer enemigo vivo (no cleave AoE)
+                    objetivo_id = enemigos_vivos[0]["id"]
+                if objetivo_id:
                     resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
                     msg_daño = resultado_daño["mensaje"]
-                else: # Si no hay objetivo concreto, el daño se reparte entre todos los enemigos vivos
-                    msg_daño = ""
-                    for e in enemigos_vivos:
-                        resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
-                        msg_daño += resultado_daño["mensaje"] + " "
+                else:
+                    msg_daño = "No hay objetivo al que aplicar el daño."
 
                 narracion.append(_narrar( # Narramos el resultado del ataque exitoso
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
@@ -375,7 +374,9 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                         daño = tirar_dado.invoke({"dado": dado_daño}) + mod # Tirada normal + modificador
                     daño = max(1, daño) # Mínimo 1 de daño
 
-                    if objetivo_id: # Si hay objetivo concreto, buscamos su tipo para usar la tool correcta
+                    if not objetivo_id and vivos: # Si no hay objetivo concreto, atacamos solo al primer vivo (no cleave AoE)
+                        objetivo_id = vivos[0]["id"]
+                    if objetivo_id: # Buscamos el tipo del objetivo para usar la tool correcta
                         entidad_objetivo = next(
                             (e for e in entidades_presentes if e["id"] == objetivo_id), None
                         )
@@ -385,14 +386,8 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                         else:
                             resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
                         msg_daño = resultado["mensaje"]
-                    else: # Sin objetivo concreto, el daño se aplica a todos los vivos
-                        msg_daño = ""
-                        for e in vivos:
-                            if e.get("tipo_entidad") == "npc":
-                                resultado = json.loads(dañar_npc.invoke({"npc_id": e["id"], "daño": daño}))
-                            else:
-                                resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
-                            msg_daño += resultado["mensaje"] + " "
+                    else:
+                        msg_daño = "No hay objetivo al que aplicar el daño."
 
                     combate_msg(_narrar( # Narramos el resultado del ataque
                         f"Jugador: '{accion}'. Check de {atributo.upper()}: "
