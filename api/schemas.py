@@ -1,14 +1,14 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel # Base para todos los schemas de validación
+from typing import Optional # Para campos que pueden ser None
 
 
 # SCHEMAS DE CAMPAÑA
 
-class CrearCampañaRequest(BaseModel):
+class CrearCampañaRequest(BaseModel): # Body del POST /campaña para crear una nueva campaña
     tema: str       # Tipo de aventura (ej: "mazmorra oscura")
     personaje: str  # Descripción del personaje (ej: "Thorin, enano guerrero")
 
-class CampañaResponse(BaseModel):
+class CampañaResponse(BaseModel): # Respuesta con los datos principales de la campaña
     titulo: str
     gancho: str
     ambientacion: dict
@@ -17,22 +17,22 @@ class CampañaResponse(BaseModel):
 
 # SCHEMAS DE PERSONAJE
 
-class CrearPersonajeRequest(BaseModel):
+class CrearPersonajeRequest(BaseModel): # Body del POST /personaje para generar una ficha nueva
     descripcion: str  # Descripción libre del personaje
 
-class AtributosPersonaje(BaseModel):
+class AtributosPersonaje(BaseModel): # Los 6 atributos del personaje en escala 0-5
     fue: int
     des: int
     con: int
-    int_: int  # 'int' es palabra reservada en Python
+    int_: int  # 'int' es palabra reservada en Python, por eso lleva guion bajo
     sab: int
     car: int
 
-class ArmaPersonaje(BaseModel):
+class ArmaPersonaje(BaseModel): # Datos básicos del arma equipada
     nombre: str
     dado_daño: str  # Ej: "1d8"
 
-class PersonajeResponse(BaseModel):
+class PersonajeResponse(BaseModel): # Ficha completa del jugador que devuelve la API
     nombre: str
     clase: str
     raza: str
@@ -41,46 +41,46 @@ class PersonajeResponse(BaseModel):
     ac: int
     atributos: dict
     arma: dict
-    inventario: Optional[list] = []
+    inventario: Optional[list] = [] # Puede estar vacío si el personaje no tiene items
 
 
 # SCHEMAS DE PARTIDA
 
-class AccionJugadorRequest(BaseModel):
+class AccionJugadorRequest(BaseModel): # Body del POST /partida/accion con lo que escribe el jugador
     accion: str  # Lo que escribe el jugador (ej: "Entro a la taberna")
 
-class RespuestaNarradorResponse(BaseModel):
+class RespuestaNarradorResponse(BaseModel): # Respuesta del narrador tras procesar la acción
     texto: str  # Narración generada
     tipo: str   # "narracion" | "combate_iniciado"
 
-class EstadoPartidaResponse(BaseModel):
-    beat_actual: Optional[dict]  # Beat en curso
+class EstadoPartidaResponse(BaseModel): # Estado general de la partida en un momento dado
+    beat_actual: Optional[dict]  # Beat en curso (None si la campaña está completada)
     resumen: str                 # Resumen narrativo acumulado
-    campaña_completada: bool
+    campaña_completada: bool     # True si todos los beats están superados
 
 
 # SCHEMAS DE COMBATE
 
-class AccionCombateRequest(BaseModel):
+class AccionCombateRequest(BaseModel): # Body del POST /combate/accion con el turno del jugador
     beat_id: str  # ID del beat donde ocurre el combate (ej: "b2")
     accion: str   # Lo que hace el jugador en su turno (ej: "Ataco con mi espada larga")
 
-class EstadoCombateResponse(BaseModel):
+class EstadoCombateResponse(BaseModel): # Estado del combate tras procesar un turno
     jugador_vida: int
     jugador_vida_max: int
     entidades_vivas: list        # Lista de entidades vivas con nombre y vida
     combate_terminado: bool
-    resultado: Optional[str]     # "victoria" | "derrota" | None
+    resultado: Optional[str]     # "victoria" | "derrota" | None si el combate sigue
     narracion: Optional[str] = None  # Texto narrado del turno (solo en POST /accion)
 
 
 # SCHEMAS DE INVENTARIO
 
-class ObjetoInventarioRequest(BaseModel):
+class ObjetoInventarioRequest(BaseModel): # Body del POST /inventario/objeto para añadir un item
     nombre: str
-    tipo: str                       # "arma" | "objeto"
+    tipo: str                       # "arma" | "consumible" | "objeto"
     dado_daño: Optional[str] = None # Solo para armas (ej: "1d6")
     descripcion: Optional[str] = ""
 
-class InventarioResponse(BaseModel):
-    inventario: list  # Lista completa de objetos
+class InventarioResponse(BaseModel): # Respuesta con el inventario completo actualizado
+    inventario: list  # Lista completa de objetos del jugador
