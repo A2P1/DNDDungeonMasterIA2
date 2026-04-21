@@ -1,6 +1,7 @@
 import json # Para leer y escribir el stats.json
 from fastapi import APIRouter, HTTPException # APIRouter para agrupar endpoints, HTTPException para errores HTTP
-from api.schemas import ObjetoInventarioRequest, InventarioResponse # Schemas de validación
+from api.schemas import ObjetoInventarioRequest, InventarioResponse, UsarItemRequest, UsarItemResponse # Schemas de validación
+from tools.inventario import usar_item as _usar_item # La tool que consume el item y aplica su efecto
 from config import STATS_PATH # Ruta a la ficha del jugador donde está el inventario
 
 router = APIRouter( # Router de inventario, todos sus endpoints empiezan por /inventario
@@ -25,6 +26,32 @@ def _guardar_stats(stats: dict): # Guarda la ficha del jugador actualizada en el
 def get_inventario(): # Devuelve el inventario completo del jugador
     stats = _cargar_stats()
     return {"inventario": stats.get("inventario", [])} # Si no tiene inventario, devolvemos lista vacía
+
+
+@router.post("/usar", response_model=UsarItemResponse)
+def usar_item(body: UsarItemRequest): # Usa un item consumible del inventario: lo elimina y aplica su efecto
+    stats = _cargar_stats()
+
+    # Comprobamos que el item existe y es consumible antes de llamar a la tool
+    inventario = stats.get("inventario", [])
+    item_existe = any(
+        i["nombre"].lower() == body.nombre.lower() and i.get("tipo") == "consumible"
+        for i in inventario
+    )
+    if not item_existe: # Si no existe o no es consumible, devolvemos 404 con un mensaje claro
+        raise HTTPException(
+            status_code=404,
+            detail=f"'{body.nombre}' no está en el inventario o no es un item consumible"
+        )
+
+    mensaje = _usar_item.invoke({"nombre_item": body.nombre}) # La tool consume el item, aplica el efecto y actualiza stats.json
+
+    stats_actualizados = _cargar_stats() # Recargamos la ficha para tener el inventario y el HP ya actualizados por la tool
+    return {
+        "mensaje": mensaje, # Texto del efecto que el frontend puede mostrar al jugador
+        "inventario": stats_actualizados.get("inventario", []), # Inventario sin el item consumido
+        "vida_actual": stats_actualizados.get("vida_actual") # HP actualizado (útil si el item curó)
+    }
 
 
 @router.post("/objeto", response_model=InventarioResponse, status_code=201)

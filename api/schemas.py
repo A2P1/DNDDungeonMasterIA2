@@ -52,6 +52,8 @@ class AccionJugadorRequest(BaseModel): # Body del POST /partida/accion con lo qu
 class RespuestaNarradorResponse(BaseModel): # Respuesta del narrador tras procesar la acción
     texto: str  # Narración generada
     tipo: str   # "narracion" | "combate_iniciado"
+    entidades: Optional[list] = None  # Solo cuando tipo == "combate_iniciado": lista de entidades contra las que pelear
+    beat_id: Optional[str] = None     # Solo cuando tipo == "combate_iniciado": id del beat (o "temp" para combate narrativo)
 
 class EstadoPartidaResponse(BaseModel): # Estado general de la partida en un momento dado
     beat_actual: Optional[dict]  # Beat en curso (None si la campaña está completada)
@@ -84,3 +86,11 @@ class ObjetoInventarioRequest(BaseModel): # Body del POST /inventario/objeto par
 
 class InventarioResponse(BaseModel): # Respuesta con el inventario completo actualizado
     inventario: list  # Lista completa de objetos del jugador
+
+class UsarItemRequest(BaseModel): # Body del POST /inventario/usar para consumir un item
+    nombre: str  # Nombre del item a usar (ej: "Poción de cura")
+
+class UsarItemResponse(BaseModel): # Respuesta tras usar un consumible
+    mensaje: str             # Texto del efecto (ej: "Usas 'Poción de cura'. Recuperas 6 HP.")
+    inventario: list         # Inventario actualizado (sin el item consumido)
+    vida_actual: Optional[int] = None  # Nueva vida del jugador si el item curó HP (None si no curó)
