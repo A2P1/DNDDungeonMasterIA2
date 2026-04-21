@@ -31,7 +31,8 @@ Responde SOLO con un JSON (sin texto antes ni después) con esta estructura:
   "efecto_exito": "string - qué pasa si la tirada tiene éxito",
   "efecto_fallo": "string - qué pasa si la tirada falla",
   "termina_combate": true/false,
-  "motivo_fin": "string - breve descripción de cómo termina el combate (solo si termina_combate es true)"
+  "motivo_fin": "string - breve descripción de cómo termina el combate (solo si termina_combate es true)",
+  "usa_item": "string - nombre exacto del item consumible del inventario que usa, o null si no usa ninguno"
 }}
 
 REGLAS PARA EVALUAR:
@@ -55,6 +56,15 @@ TODO lo demás: acciones creativas, habilidades, huir, intimidar, lanzar objetos
   - car: intimidar, provocar, distraer, engañar, convencer, negociar
 - La DC depende de la dificultad: 8 (fácil), 10 (normal), 12 (moderado), 15 (difícil), 18 (casi imposible)
 - dado_daño solo si la acción causa daño directo. null si es un efecto no dañino (como cegar, derribar o huir)
+
+USA_ITEM (string | null):
+Marca el nombre del item cuando el jugador quiera usar un consumible de su inventario (pociones, vendajes, pergaminos, etc.).
+- Solo puede ser un item presente en el inventario del jugador (lo tienes en el contexto bajo "Consumibles disponibles")
+- Copia el nombre EXACTO tal cual aparece en el inventario
+- Usar un item NO requiere tirada: siempre funciona si el item está presente, pero consume el turno del jugador (los enemigos atacan igualmente)
+- Si el jugador NO menciona usar un consumible, deja usa_item en null
+- Ejemplos: "bebo mi poción", "me curo", "uso la venda" → usa_item: "<nombre>"
+- Si el jugador intenta usar un item que no tiene, deja usa_item en null y marca viable=false con la razón apropiada
 
 TERMINA_COMBATE (true/false):
 Marca true SOLO cuando la acción, si tiene éxito, resuelve el combate de forma narrativa (sin que todos los enemigos mueran ni el jugador muera). Ejemplos:

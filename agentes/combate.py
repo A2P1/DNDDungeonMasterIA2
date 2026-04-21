@@ -9,7 +9,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_estado_combate
 from tools.dados import tirar_d20, tirar_dado
-from tools.inventario import get_armas, verificar_arma_en_accion
+from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
 from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME
 from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg
 
@@ -118,10 +118,12 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
             _guardar_jugador(jugador) # Persistimos el cambio de arma para que no se pierda si no hay daño en este turno
 
     arma_actual = jugador.get("arma", {}) # Cogemos el arma activa, si no tiene ninguna usamos un dict vacío
+    consumibles = [i for i in jugador.get("inventario", []) if i.get("tipo") == "consumible"] # Items consumibles disponibles
     contexto = ( # Construimos el contexto que le pasaremos al LLM para que evalúe la acción
         f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
         f"Arma: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')}), "
         f"Atributos: {json.dumps(jugador.get('atributos', {}))}\n"
+        f"Consumibles disponibles: {json.dumps(consumibles, ensure_ascii=False)}\n"
         f"Enemigos vivos: {json.dumps(enemigos_vivos, ensure_ascii=False)}"
     )
     evaluacion = _evaluar_accion(accion, contexto) # El LLM decide si la acción es viable y cómo resolverla
@@ -136,66 +138,75 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
     dc = evaluacion.get("dc", 12) # Dificultad que hay que superar con la tirada
     mod = _modificador(jugador.get("atributos", {}).get(atributo, 0)) # Modificador del atributo del jugador
 
-    tirada = tirar_d20.invoke({}) # Tiramos el d20
-    critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
-    pifia = (tirada == 1) # Nat 1 = pifia, fallo automático con complicación
-    total = tirada + mod # Total final de la tirada
-
-    if pifia: # Si saca un 1, fallo automático independientemente del modificador
+    # Si el jugador usa un item consumible, se resuelve sin tirada y consume el turno (los enemigos atacan igual más abajo)
+    item_name = evaluacion.get("usa_item")
+    if item_name:
+        resultado_item = usar_item.invoke({"nombre_item": item_name})
+        jugador = _cargar_jugador() # Recargamos para reflejar cambios en HP e inventario
         narracion.append(_narrar(
-            f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-            f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
-            f"Narra una complicación: el arma se atasca, el jugador tropieza, "
-            f"se golpea a sí mismo o queda expuesto."
+            f"El jugador usa '{item_name}'. Resultado: {resultado_item}. Narra el uso del item con color."
         ))
-    elif critico or total >= dc: # Si saca 20 o supera la DC, el ataque acierta
-        if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
-            motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
-            texto = _narrar(
-                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
-                f"El combate termina: {motivo}. Narra el desenlace con tensión."
-            )
-            return _respuesta_turno(jugador, estado, texto, "resolucion")
+    else:
+        tirada = tirar_d20.invoke({}) # Tiramos el d20
+        critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
+        pifia = (tirada == 1) # Nat 1 = pifia, fallo automático con complicación
+        total = tirada + mod # Total final de la tirada
 
-        dado_daño = evaluacion.get("dado_daño") # Dado de daño del arma (ej: "1d8")
-        if dado_daño: # Si hay daño que aplicar
-            if critico: # Crítico: daño máximo posible (todos los dados al máximo) + modificador
-                partes = dado_daño.lower().split("d") # Separamos "1d8" en ["1", "8"]
-                cantidad = int(partes[0]) # Número de dados
-                caras = int(partes[1]) # Caras de cada dado
-                daño = (cantidad * caras) + mod # Máximo posible + modificador
-            else:
-                daño = tirar_dado.invoke({"dado": dado_daño}) + mod # Tirada normal + modificador
-            daño = max(1, daño) # El daño mínimo siempre es 1
-
-            objetivo_id = evaluacion.get("objetivo") # ID de la entidad a la que ataca
-            if objetivo_id: # Si el LLM identificó un objetivo concreto, solo le hacemos daño a ese
-                resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
-                msg_daño = resultado_daño["mensaje"]
-            else: # Si no hay objetivo concreto, el daño se reparte entre todos los enemigos vivos
-                msg_daño = ""
-                for e in enemigos_vivos:
-                    resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
-                    msg_daño += resultado_daño["mensaje"] + " "
-
-            narracion.append(_narrar( # Narramos el resultado del ataque exitoso
-                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"{tirada}+{mod}={total} vs DC {dc}. "
-                f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
-            ))
-        else: # Si la acción no hace daño directo (empujar, cegar...) narramos el efecto especial
-            efecto = evaluacion.get("efecto_exito", "")
+        if pifia: # Si saca un 1, fallo automático independientemente del modificador
             narracion.append(_narrar(
                 f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
+                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
+                f"Narra una complicación: el arma se atasca, el jugador tropieza, "
+                f"se golpea a sí mismo o queda expuesto."
             ))
-    else: # Si no llega a la DC, el ataque falla
-        efecto = evaluacion.get("efecto_fallo", "")
-        narracion.append(_narrar(
-            f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-            f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
-        ))
+        elif critico or total >= dc: # Si saca 20 o supera la DC, el ataque acierta
+            if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
+                motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
+                texto = _narrar(
+                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
+                    f"El combate termina: {motivo}. Narra el desenlace con tensión."
+                )
+                return _respuesta_turno(jugador, estado, texto, "resolucion")
+
+            dado_daño = evaluacion.get("dado_daño") # Dado de daño del arma (ej: "1d8")
+            if dado_daño: # Si hay daño que aplicar
+                if critico: # Crítico: daño máximo posible (todos los dados al máximo) + modificador
+                    partes = dado_daño.lower().split("d") # Separamos "1d8" en ["1", "8"]
+                    cantidad = int(partes[0]) # Número de dados
+                    caras = int(partes[1]) # Caras de cada dado
+                    daño = (cantidad * caras) + mod # Máximo posible + modificador
+                else:
+                    daño = tirar_dado.invoke({"dado": dado_daño}) + mod # Tirada normal + modificador
+                daño = max(1, daño) # El daño mínimo siempre es 1
+
+                objetivo_id = evaluacion.get("objetivo") # ID de la entidad a la que ataca
+                if objetivo_id: # Si el LLM identificó un objetivo concreto, solo le hacemos daño a ese
+                    resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
+                    msg_daño = resultado_daño["mensaje"]
+                else: # Si no hay objetivo concreto, el daño se reparte entre todos los enemigos vivos
+                    msg_daño = ""
+                    for e in enemigos_vivos:
+                        resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
+                        msg_daño += resultado_daño["mensaje"] + " "
+
+                narracion.append(_narrar( # Narramos el resultado del ataque exitoso
+                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                    f"{tirada}+{mod}={total} vs DC {dc}. "
+                    f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
+                ))
+            else: # Si la acción no hace daño directo (empujar, cegar...) narramos el efecto especial
+                efecto = evaluacion.get("efecto_exito", "")
+                narracion.append(_narrar(
+                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
+                ))
+        else: # Si no llega a la DC, el ataque falla
+            efecto = evaluacion.get("efecto_fallo", "")
+            narracion.append(_narrar(
+                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
+            ))
 
     estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id})) # Actualizamos el estado del combate tras el turno del jugador
     if estado["combate_terminado"]: # Si todos los enemigos han muerto, victoria
@@ -282,10 +293,12 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                 _guardar_jugador(jugador) # Persistimos el cambio de arma inmediatamente
 
         arma_actual = arma_turno or jugador.get("arma", {}) # Usamos el arma del turno, o la que tenga equipada si no eligió ninguna
+        consumibles = [i for i in jugador.get("inventario", []) if i.get("tipo") == "consumible"] # Items consumibles disponibles
         contexto = ( # Contexto completo para que el LLM evalúe la acción
             f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
             f"Arma: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')}), "
             f"Atributos: {json.dumps(jugador.get('atributos', {}))}\n"
+            f"Consumibles disponibles: {json.dumps(consumibles, ensure_ascii=False)}\n"
             f"Entidades presentes (vivas): {json.dumps(vivos, ensure_ascii=False)}"
         )
 
@@ -318,77 +331,86 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
         dc = evaluacion.get("dc", 12) # Dificultad a superar
         mod = _modificador(jugador.get("atributos", {}).get(atributo, 0)) # Modificador del jugador para ese atributo
 
-        tirada = tirar_d20.invoke({}) # Tiramos el d20
-        critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
-        pifia = (tirada == 1) # Nat 1 = pifia
-        total = tirada + mod
-
-        if pifia: # Pifia: fallo automático con complicación narrativa
+        # Si el jugador usa un item consumible, se resuelve sin tirada y consume el turno (los enemigos atacan igual más abajo)
+        item_name = evaluacion.get("usa_item")
+        if item_name:
+            resultado_item = usar_item.invoke({"nombre_item": item_name})
+            jugador = _cargar_jugador() # Recargamos para reflejar cambios en HP e inventario
             combate_msg(_narrar(
-                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
-                f"Narra una complicación: el arma se atasca, el jugador tropieza, "
-                f"se golpea a sí mismo o queda expuesto."
+                f"El jugador usa '{item_name}'. Resultado: {resultado_item}. Narra el uso del item con color."
             ))
-        elif critico or total >= dc: # Acierto: crítico o supera la DC
-            if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
-                motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
+        else:
+            tirada = tirar_d20.invoke({}) # Tiramos el d20
+            critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
+            pifia = (tirada == 1) # Nat 1 = pifia
+            total = tirada + mod
+
+            if pifia: # Pifia: fallo automático con complicación narrativa
                 combate_msg(_narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
-                    f"El combate termina: {motivo}. Narra el desenlace con tensión."
+                    f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente. "
+                    f"Narra una complicación: el arma se atasca, el jugador tropieza, "
+                    f"se golpea a sí mismo o queda expuesto."
                 ))
-                return "resolucion"
+            elif critico or total >= dc: # Acierto: crítico o supera la DC
+                if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
+                    motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
+                    combate_msg(_narrar(
+                        f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                        f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
+                        f"El combate termina: {motivo}. Narra el desenlace con tensión."
+                    ))
+                    return "resolucion"
 
-            dado_daño = evaluacion.get("dado_daño")
-            objetivo_id = evaluacion.get("objetivo")
+                dado_daño = evaluacion.get("dado_daño")
+                objetivo_id = evaluacion.get("objetivo")
 
-            if dado_daño: # Si hay daño que aplicar
-                if critico: # Crítico: daño máximo (todos los dados al máximo) + modificador
-                    partes = dado_daño.lower().split("d")
-                    cantidad = int(partes[0])
-                    caras = int(partes[1])
-                    daño = (cantidad * caras) + mod
-                else:
-                    daño = tirar_dado.invoke({"dado": dado_daño}) + mod # Tirada normal + modificador
-                daño = max(1, daño) # Mínimo 1 de daño
-
-                if objetivo_id: # Si hay objetivo concreto, buscamos su tipo para usar la tool correcta
-                    entidad_objetivo = next(
-                        (e for e in entidades_presentes if e["id"] == objetivo_id), None
-                    )
-                    tipo_entidad = entidad_objetivo.get("tipo_entidad", "enemigo") if entidad_objetivo else "enemigo"
-                    if tipo_entidad == "npc": # Los NPCs y enemigos están en secciones distintas del JSON
-                        resultado = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
+                if dado_daño: # Si hay daño que aplicar
+                    if critico: # Crítico: daño máximo (todos los dados al máximo) + modificador
+                        partes = dado_daño.lower().split("d")
+                        cantidad = int(partes[0])
+                        caras = int(partes[1])
+                        daño = (cantidad * caras) + mod
                     else:
-                        resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
-                    msg_daño = resultado["mensaje"]
-                else: # Sin objetivo concreto, el daño se aplica a todos los vivos
-                    msg_daño = ""
-                    for e in vivos:
-                        if e.get("tipo_entidad") == "npc":
-                            resultado = json.loads(dañar_npc.invoke({"npc_id": e["id"], "daño": daño}))
-                        else:
-                            resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
-                        msg_daño += resultado["mensaje"] + " "
+                        daño = tirar_dado.invoke({"dado": dado_daño}) + mod # Tirada normal + modificador
+                    daño = max(1, daño) # Mínimo 1 de daño
 
-                combate_msg(_narrar( # Narramos el resultado del ataque
-                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. "
-                    f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
-                ))
-            else: # Acción sin daño directo, narramos el efecto especial
-                efecto = evaluacion.get("efecto_exito", "")
+                    if objetivo_id: # Si hay objetivo concreto, buscamos su tipo para usar la tool correcta
+                        entidad_objetivo = next(
+                            (e for e in entidades_presentes if e["id"] == objetivo_id), None
+                        )
+                        tipo_entidad = entidad_objetivo.get("tipo_entidad", "enemigo") if entidad_objetivo else "enemigo"
+                        if tipo_entidad == "npc": # Los NPCs y enemigos están en secciones distintas del JSON
+                            resultado = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
+                        else:
+                            resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
+                        msg_daño = resultado["mensaje"]
+                    else: # Sin objetivo concreto, el daño se aplica a todos los vivos
+                        msg_daño = ""
+                        for e in vivos:
+                            if e.get("tipo_entidad") == "npc":
+                                resultado = json.loads(dañar_npc.invoke({"npc_id": e["id"], "daño": daño}))
+                            else:
+                                resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": e["id"], "daño": daño}))
+                            msg_daño += resultado["mensaje"] + " "
+
+                    combate_msg(_narrar( # Narramos el resultado del ataque
+                        f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                        f"{tirada}+{mod}={total} vs DC {dc}. "
+                        f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
+                    ))
+                else: # Acción sin daño directo, narramos el efecto especial
+                    efecto = evaluacion.get("efecto_exito", "")
+                    combate_msg(_narrar(
+                        f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                        f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
+                    ))
+            else: # Fallo: no llega a la DC
+                efecto = evaluacion.get("efecto_fallo", "")
                 combate_msg(_narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
+                    f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
                 ))
-        else: # Fallo: no llega a la DC
-            efecto = evaluacion.get("efecto_fallo", "")
-            combate_msg(_narrar(
-                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
-            ))
 
         vivos_actual = _get_vivos(entidades_presentes) # Comprobamos si quedan vivos tras el turno del jugador
         if not vivos_actual: # Si no quedan, el jugador ha ganado
