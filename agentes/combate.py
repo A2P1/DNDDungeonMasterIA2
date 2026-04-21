@@ -219,17 +219,32 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
             atributo_ataque = "fue"
         mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2)) # Modificador del atributo de ataque
         tirada_enemigo = tirar_d20.invoke({}) # El enemigo tira su d20
+        critico_enemigo = (tirada_enemigo == 20) # Nat 20 = crítico (daño máximo)
+        pifia_enemigo = (tirada_enemigo == 1) # Nat 1 = pifia (fallo automático con complicación)
         total_enemigo = tirada_enemigo + mod_enemigo # Total del ataque del enemigo
 
-        if total_enemigo >= jugador["ac"]: # Si supera la AC del jugador, el ataque acierta
-            daño_enemigo = tirar_dado.invoke({"dado": info.get("dado_daño", "1d4")}) + mod_enemigo
+        if pifia_enemigo: # Nat 1: fallo automático con complicación narrativa
+            narracion.append(_narrar(
+                f"{info['nombre']} intenta atacar con {info.get('arma', 'sus garras')}. "
+                f"NAT 1. ¡PIFIA! Narra una complicación dramática para el enemigo: tropieza, su arma se atasca, "
+                f"se golpea a sí mismo o queda expuesto brevemente."
+            ))
+        elif critico_enemigo or total_enemigo >= jugador["ac"]: # Crítico o supera la AC
+            dado = info.get("dado_daño", "1d4")
+            if critico_enemigo: # Daño máximo del dado + modificador
+                partes = dado.lower().split("d")
+                cantidad = int(partes[0])
+                caras = int(partes[1])
+                daño_enemigo = (cantidad * caras) + mod_enemigo
+            else:
+                daño_enemigo = tirar_dado.invoke({"dado": dado}) + mod_enemigo
             daño_enemigo = max(1, daño_enemigo) # Daño mínimo 1
             jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo) # Restamos la vida, mínimo 0
             _guardar_jugador(jugador) # Guardamos la ficha actualizada del jugador
             narracion.append(_narrar( # Narramos el golpe del enemigo
                 f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
                 f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
-                f"ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
+                f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
             ))
         else: # Si no llega a la AC, el ataque del enemigo falla
             narracion.append(_narrar(
@@ -429,17 +444,32 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                 atributo_ataque = "fue"
             mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2)) # Modificador según el atributo de ataque
             tirada_enemigo = tirar_d20.invoke({}) # La entidad tira su d20
+            critico_enemigo = (tirada_enemigo == 20) # Nat 20 = crítico (daño máximo)
+            pifia_enemigo = (tirada_enemigo == 1) # Nat 1 = pifia (fallo automático con complicación)
             total_enemigo = tirada_enemigo + mod_enemigo
 
-            if total_enemigo >= jugador["ac"]: # Si supera la AC del jugador, el ataque acierta
-                daño_enemigo = tirar_dado.invoke({"dado": info.get("dado_daño", "1d4")}) + mod_enemigo
+            if pifia_enemigo: # Nat 1: fallo automático con complicación narrativa
+                enemigo_msg(info['nombre'], _narrar(
+                    f"{info['nombre']} intenta contraatacar con {info.get('arma', 'sus manos')}. "
+                    f"NAT 1. ¡PIFIA! Narra una complicación dramática para el enemigo: tropieza, su arma se atasca, "
+                    f"se golpea a sí mismo o queda expuesto brevemente."
+                ))
+            elif critico_enemigo or total_enemigo >= jugador["ac"]: # Crítico o supera la AC
+                dado = info.get("dado_daño", "1d4")
+                if critico_enemigo: # Daño máximo del dado + modificador
+                    partes = dado.lower().split("d")
+                    cantidad = int(partes[0])
+                    caras = int(partes[1])
+                    daño_enemigo = (cantidad * caras) + mod_enemigo
+                else:
+                    daño_enemigo = tirar_dado.invoke({"dado": dado}) + mod_enemigo
                 daño_enemigo = max(1, daño_enemigo) # Mínimo 1 de daño
                 jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo) # Restamos vida al jugador, mínimo 0
                 _guardar_jugador(jugador) # Guardamos la ficha actualizada
                 enemigo_msg(info['nombre'], _narrar( # Narramos el golpe de la entidad
                     f"{info['nombre']} contraataca al jugador con {info.get('arma', 'sus manos')}. "
                     f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
-                    f"ACIERTA. Daño: {daño_enemigo}. "
+                    f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. "
                     f"Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
                 ))
             else: # Si no llega a la AC, el ataque de la entidad falla
