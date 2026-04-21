@@ -214,24 +214,27 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
 
     for e_resumen in estado.get("enemigos_vivos", [])[:2]: # Máximo 2 enemigos atacan por turno (el resto se posiciona)
         info = json.loads(get_info_entidad.invoke({"entidad_id": e_resumen["id"]})) # Cargamos la ficha completa del enemigo
-        mod_fue_enemigo = _modificador(info.get("atributos", {}).get("fue", 2)) # Modificador de fuerza del enemigo
+        atributo_ataque = info.get("atributo_ataque", "fue") # Atributo del arma del enemigo (fallback a fue para entidades antiguas)
+        if atributo_ataque not in ("fue", "des", "int"): # Validamos que sea un atributo válido, si no, fallback
+            atributo_ataque = "fue"
+        mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2)) # Modificador del atributo de ataque
         tirada_enemigo = tirar_d20.invoke({}) # El enemigo tira su d20
-        total_enemigo = tirada_enemigo + mod_fue_enemigo # Total del ataque del enemigo
+        total_enemigo = tirada_enemigo + mod_enemigo # Total del ataque del enemigo
 
         if total_enemigo >= jugador["ac"]: # Si supera la AC del jugador, el ataque acierta
-            daño_enemigo = tirar_dado.invoke({"dado": info.get("dado_daño", "1d4")}) + mod_fue_enemigo
+            daño_enemigo = tirar_dado.invoke({"dado": info.get("dado_daño", "1d4")}) + mod_enemigo
             daño_enemigo = max(1, daño_enemigo) # Daño mínimo 1
             jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo) # Restamos la vida, mínimo 0
             _guardar_jugador(jugador) # Guardamos la ficha actualizada del jugador
             narracion.append(_narrar( # Narramos el golpe del enemigo
                 f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
-                f"Tirada: {tirada_enemigo}+{mod_fue_enemigo}={total_enemigo} vs AC {jugador['ac']}. "
+                f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
                 f"ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
             ))
         else: # Si no llega a la AC, el ataque del enemigo falla
             narracion.append(_narrar(
                 f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
-                f"Tirada: {tirada_enemigo}+{mod_fue_enemigo}={total_enemigo} vs AC {jugador['ac']}. FALLA."
+                f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
             ))
 
     if jugador["vida_actual"] <= 0: # Si la vida del jugador llega a 0, derrota
@@ -421,25 +424,28 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             except (json.JSONDecodeError, TypeError): # Si falla el parseo saltamos esta entidad
                 continue
 
-            mod_fue = _modificador(info.get("atributos", {}).get("fue", 2)) # Modificador de fuerza de la entidad
+            atributo_ataque = info.get("atributo_ataque", "fue") # Atributo del arma de la entidad (fallback a fue)
+            if atributo_ataque not in ("fue", "des", "int"): # Validamos que sea un atributo válido, si no, fallback
+                atributo_ataque = "fue"
+            mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2)) # Modificador según el atributo de ataque
             tirada_enemigo = tirar_d20.invoke({}) # La entidad tira su d20
-            total_enemigo = tirada_enemigo + mod_fue
+            total_enemigo = tirada_enemigo + mod_enemigo
 
             if total_enemigo >= jugador["ac"]: # Si supera la AC del jugador, el ataque acierta
-                daño_enemigo = tirar_dado.invoke({"dado": info.get("dado_daño", "1d4")}) + mod_fue
+                daño_enemigo = tirar_dado.invoke({"dado": info.get("dado_daño", "1d4")}) + mod_enemigo
                 daño_enemigo = max(1, daño_enemigo) # Mínimo 1 de daño
                 jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo) # Restamos vida al jugador, mínimo 0
                 _guardar_jugador(jugador) # Guardamos la ficha actualizada
                 enemigo_msg(info['nombre'], _narrar( # Narramos el golpe de la entidad
                     f"{info['nombre']} contraataca al jugador con {info.get('arma', 'sus manos')}. "
-                    f"Tirada: {tirada_enemigo}+{mod_fue}={total_enemigo} vs AC {jugador['ac']}. "
+                    f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
                     f"ACIERTA. Daño: {daño_enemigo}. "
                     f"Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
                 ))
             else: # Si no llega a la AC, el ataque de la entidad falla
                 enemigo_msg(info['nombre'], _narrar(
                     f"{info['nombre']} intenta contraatacar al jugador. "
-                    f"Tirada: {tirada_enemigo}+{mod_fue}={total_enemigo} vs AC {jugador['ac']}. FALLA."
+                    f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
                 ))
 
         if jugador["vida_actual"] <= 0: # Si la vida del jugador llega a 0, derrota
