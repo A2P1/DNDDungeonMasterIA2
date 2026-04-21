@@ -238,10 +238,10 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
         for e in entidades_presentes
     )
     arma_jugador = jugador.get("arma", {}).get("nombre", "sus puños") # Arma del jugador, si no tiene ninguna usa sus puños
-    combate_msg(_narrar( # Narramos la intro del combate
-        f"El jugador ({jugador['nombre']}, armado con {arma_jugador}) inicia un ataque inesperado contra: {nombres}. "
-        f"Este primer ataque NO es certero, narra cómo el jugador falla o los enemigos esquivan. "
-        f"Describe cómo irrumpe el combate de forma brusca e imprevista."
+    combate_msg(_narrar( # Narramos la intro del combate (solo ambientación, sin resolver acción)
+        f"El jugador ({jugador['nombre']}, armado con {arma_jugador}) se enfrenta a: {nombres}. "
+        f"Describe cómo irrumpe el combate de forma brusca e imprevista, presentando a los enemigos y la tensión del momento. "
+        f"No resuelvas ningún ataque todavía."
     ))
     _mostrar_estado(jugador, entidades_presentes) # Mostramos el estado inicial del combate
 
