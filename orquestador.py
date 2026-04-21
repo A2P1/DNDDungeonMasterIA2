@@ -286,14 +286,20 @@ def main():
             for e in entidades_beat:
                 e["tipo_entidad"] = "enemigo"
             resultado = combate(entidades_beat)
-            marcar_beat_completado.invoke({"beat_id": beat_combate["id"]})
 
             # Transición narrativa post-combate
             if resultado == "victoria":
+                marcar_beat_completado.invoke({"beat_id": beat_combate["id"]})
                 loot = _recoger_loot(entidades_beat)
-                loot_str = ", ".join(i["nombre"] for i in loot) if loot else "nada útil"
-                texto = narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}. Ha recogido: {loot_str}. Narra las consecuencias de la victoria y guía hacia lo que viene después.")
+                loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
+                texto = narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}.{loot_fragment} Narra las consecuencias de la victoria y guía hacia lo que viene después.")
                 victoria_msg(texto)
+            elif resultado == "resolucion":
+                marcar_beat_completado.invoke({"beat_id": beat_combate["id"]}) # El obstáculo queda superado aunque no haya muertes
+                loot = _recoger_loot(entidades_beat) # Recogemos el loot de los enemigos que sí hayan muerto durante el combate
+                loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
+                texto = narrador(f"[SISTEMA] El jugador ha resuelto el combate en: {beat_combate['descripcion']} de forma narrativa (huida, negociación, intimidación, etc.) sin matar a todos los enemigos.{loot_fragment} Narra el desenlace y guía hacia lo que viene después.")
+                narrador_msg(texto)
             else:
                 texto = narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída.")
                 derrota_msg(texto)
@@ -316,10 +322,13 @@ def main():
 
                     # Actualizar el resumen con lo que ocurrió en el combate
                     nombres_derrotados = ", ".join(e['nombre'] for e in entidades)
-                    resumen_combate = (
-                        f"El jugador inició un combate inesperado contra {nombres_derrotados} y "
-                        f"{'venció, eliminándoles.' if resultado == 'victoria' else 'fue derrotado.'}"
-                    )
+                    if resultado == "victoria":
+                        cierre = "venció, eliminándoles."
+                    elif resultado == "resolucion":
+                        cierre = "resolvió el combate sin matarles (huida, negociación o similar)."
+                    else:
+                        cierre = "fue derrotado."
+                    resumen_combate = f"El jugador inició un combate inesperado contra {nombres_derrotados} y {cierre}"
                     RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
                     with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
                         f.write(resumen_combate + "\n")
@@ -327,12 +336,20 @@ def main():
                     if resultado == "derrota":
                         break
 
+                    if resultado == "resolucion":
+                        loot = _recoger_loot(entidades) # Recogemos loot de los que sí murieron durante el combate
+                        loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
+                        narrador_msg(narrador(
+                            f"[SISTEMA] El combate contra {nombres_derrotados} ha terminado de forma narrativa (huida, negociación, intimidación, etc.) sin matarles a todos.{loot_fragment} "
+                            f"Narra el desenlace y continúa la historia."
+                        ))
+                        continue
+
                     loot = _recoger_loot(entidades)
-                    loot_str = ", ".join(i["nombre"] for i in loot) if loot else "nada útil"
+                    loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
                     narrador_msg(narrador(
                         f"[SISTEMA] El jugador acaba de derrotar en combate a: {nombres_derrotados}. "
-                        f"Esas criaturas/personajes han muerto y ya no están presentes. "
-                        f"Ha recogido: {loot_str}. "
+                        f"Esas criaturas/personajes han muerto y ya no están presentes.{loot_fragment} "
                         f"Narra las consecuencias de la victoria y continúa la historia."
                     ))
                     continue

@@ -115,6 +115,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
             return _respuesta_turno(jugador, estado, texto, None)
         elif verificacion["estado"] == "encontrada": # Si menciona un arma válida, la guardamos como arma activa
             jugador["arma"] = verificacion["arma"]
+            _guardar_jugador(jugador) # Persistimos el cambio de arma para que no se pierda si no hay daño en este turno
 
     arma_actual = jugador.get("arma", {}) # Cogemos el arma activa, si no tiene ninguna usamos un dict vacío
     contexto = ( # Construimos el contexto que le pasaremos al LLM para que evalúe la acción
@@ -148,6 +149,15 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
             f"se golpea a sí mismo o queda expuesto."
         ))
     elif critico or total >= dc: # Si saca 20 o supera la DC, el ataque acierta
+        if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
+            motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
+            texto = _narrar(
+                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
+                f"El combate termina: {motivo}. Narra el desenlace con tensión."
+            )
+            return _respuesta_turno(jugador, estado, texto, "resolucion")
+
         dado_daño = evaluacion.get("dado_daño") # Dado de daño del arma (ej: "1d8")
         if dado_daño: # Si hay daño que aplicar
             if critico: # Crítico: daño máximo posible (todos los dados al máximo) + modificador
@@ -269,6 +279,7 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             elif verificacion["estado"] == "encontrada": # Si el arma existe, la guardamos para este turno y los siguientes
                 arma_turno = verificacion["arma"]
                 jugador["arma"] = arma_turno
+                _guardar_jugador(jugador) # Persistimos el cambio de arma inmediatamente
 
         arma_actual = arma_turno or jugador.get("arma", {}) # Usamos el arma del turno, o la que tenga equipada si no eligió ninguna
         contexto = ( # Contexto completo para que el LLM evalúe la acción
@@ -295,6 +306,7 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             if v2["estado"] == "encontrada": # Si elige un arma válida, la guardamos
                 arma_turno = v2["arma"]
                 jugador["arma"] = arma_turno
+                _guardar_jugador(jugador) # Persistimos el cambio de arma inmediatamente
             else: # Si el arma no existe, lo informamos y pedimos otra acción
                 combate_msg(f"No tienes esa arma. Armas disponibles: {nombres_armas}")
                 continue
@@ -319,6 +331,15 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                 f"se golpea a sí mismo o queda expuesto."
             ))
         elif critico or total >= dc: # Acierto: crítico o supera la DC
+            if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
+                motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
+                combate_msg(_narrar(
+                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
+                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
+                    f"El combate termina: {motivo}. Narra el desenlace con tensión."
+                ))
+                return "resolucion"
+
             dado_daño = evaluacion.get("dado_daño")
             objetivo_id = evaluacion.get("objetivo")
 

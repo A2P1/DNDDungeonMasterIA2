@@ -29,7 +29,9 @@ Responde SOLO con un JSON (sin texto antes ni después) con esta estructura:
   "dado_daño": "1d4 | 1d6 | 1d8 | null",
   "objetivo": "string - id del enemigo afectado o null si afecta a todos",
   "efecto_exito": "string - qué pasa si la tirada tiene éxito",
-  "efecto_fallo": "string - qué pasa si la tirada falla"
+  "efecto_fallo": "string - qué pasa si la tirada falla",
+  "termina_combate": true/false,
+  "motivo_fin": "string - breve descripción de cómo termina el combate (solo si termina_combate es true)"
 }}
 
 REGLAS PARA EVALUAR:
@@ -43,16 +45,25 @@ Incluye: "ataco", "le doy con mi espada", "le clavo la daga", "le pego un hachaz
 - objetivo: el id del enemigo al que ataca. Si no menciona a ninguno específico, elige al primero de la lista
 
 TIPO "accion":
-TODO lo demás: acciones creativas, habilidades, huir, intimidar, lanzar objetos, analizar debilidades, etc.
+TODO lo demás: acciones creativas, habilidades, huir, intimidar, lanzar objetos, analizar debilidades, convencer, negociar, etc.
 - El atributo debe corresponder a la naturaleza de la acción:
   - fue: empujar, derribar, romper, forzar
   - des: esquivar, saltar, trepar, lanzar algo con precisión, huir, escapar
   - con: resistir, aguantar, soportar
   - int: analizar debilidad, recordar información, usar mecanismos
   - sab: percibir, intuir, anticipar movimientos
-  - car: intimidar, provocar, distraer, engañar
+  - car: intimidar, provocar, distraer, engañar, convencer, negociar
 - La DC depende de la dificultad: 8 (fácil), 10 (normal), 12 (moderado), 15 (difícil), 18 (casi imposible)
 - dado_daño solo si la acción causa daño directo. null si es un efecto no dañino (como cegar, derribar o huir)
+
+TERMINA_COMBATE (true/false):
+Marca true SOLO cuando la acción, si tiene éxito, resuelve el combate de forma narrativa (sin que todos los enemigos mueran ni el jugador muera). Ejemplos:
+- Huir/escapar con éxito ("huyo", "salgo corriendo", "me retiro")
+- Convencer a los enemigos de rendirse o parar
+- Intimidar a los enemigos para que huyan ellos
+- Negociar una tregua o alianza
+- Activar un evento que interrumpe el combate (derrumbar la cueva, hacer sonar una alarma que los disperse, etc.)
+En cualquier otro caso deja termina_combate en false. Si es true, añade un "motivo_fin" breve ("huida del jugador", "enemigos convencidos de rendirse", "bandidos huyen intimidados", etc.).
 
 REGLAS GENERALES:
 - Los atributos van de 0 a 5 y se usan directamente como modificador (no hay conversión)
