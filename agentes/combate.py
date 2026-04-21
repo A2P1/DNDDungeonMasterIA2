@@ -192,7 +192,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
         narracion.append(_narrar("Todos los enemigos han caído. El jugador ha ganado el combate."))
         return _respuesta_turno(jugador, estado, "\n\n".join(narracion), "victoria")
 
-    for e_resumen in estado.get("enemigos_vivos", []): # Turno de cada enemigo vivo
+    for e_resumen in estado.get("enemigos_vivos", [])[:2]: # Máximo 2 enemigos atacan por turno (el resto se posiciona)
         info = json.loads(get_info_entidad.invoke({"entidad_id": e_resumen["id"]})) # Cargamos la ficha completa del enemigo
         mod_fue_enemigo = _modificador(info.get("atributos", {}).get("fue", 2)) # Modificador de fuerza del enemigo
         tirada_enemigo = tirar_d20.invoke({}) # El enemigo tira su d20
@@ -376,7 +376,7 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             ))
             return "victoria"
 
-        for e in vivos_actual: # Turno de cada entidad viva
+        for e in vivos_actual[:2]: # Máximo 2 enemigos atacan por turno (el resto se posiciona)
             info_raw = get_info_entidad.invoke({"entidad_id": e["id"]}) # Cargamos la ficha actualizada de la entidad
             try:
                 info = json.loads(info_raw)
