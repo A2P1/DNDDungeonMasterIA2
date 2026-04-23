@@ -3,8 +3,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del proyecto al path para que los imports funcionen
 
 import json
-import re
+from typing import Literal, Optional
 from dotenv import load_dotenv
+from pydantic import BaseModel, ConfigDict, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from config import STATS_PATH, MODEL_NAME, CREADOR_PERSONAJE_PROMPT_PATH
@@ -12,7 +13,53 @@ from config import STATS_PATH, MODEL_NAME, CREADOR_PERSONAJE_PROMPT_PATH
 
 load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key
 
-_llm = ChatOpenAI(model=MODEL_NAME, temperature=0.3) # Temperatura baja para que los stats generados sean coherentes y consistentes
+
+# ── Esquema estructurado de la ficha del personaje ──────────────────────────
+# Pydantic valida rangos y tipos. LangChain convierte estos modelos a JSON Schema
+# y OpenAI está obligado a devolver una respuesta que encaje exactamente, así que
+# no hace falta parsear markdown ni rezar para que el LLM devuelva JSON válido.
+
+class Atributos(BaseModel):
+    model_config = ConfigDict(populate_by_name=True) # Permite instanciar tanto con "int_" (nombre Python) como con "int" (alias JSON)
+    fue: int = Field(ge=0, le=5)
+    des: int = Field(ge=0, le=5)
+    con: int = Field(ge=0, le=5)
+    int_: int = Field(ge=0, le=5, alias="int") # "int" es palabra reservada en Python, usamos alias para el JSON
+    sab: int = Field(ge=0, le=5)
+    car: int = Field(ge=0, le=5)
+
+
+class Arma(BaseModel):
+    nombre: str
+    dado_daño: str
+    atributo: Literal["fue", "des", "int"]
+    tipo: str
+
+
+class ItemInventario(BaseModel): # Un item puede ser arma o consumible: los campos específicos son opcionales
+    nombre: str
+    tipo: Literal["arma", "consumible"]
+    dado_daño: Optional[str] = None # solo para armas
+    atributo: Optional[str] = None # solo para armas
+    efecto: Optional[str] = None # solo para consumibles
+    descripcion: Optional[str] = None
+
+
+class PersonajeStats(BaseModel):
+    nombre: str
+    clase: str
+    raza: str
+    vida_max: int = Field(ge=10, le=20)
+    ac: int = Field(ge=10, le=16)
+    atributos: Atributos
+    arma: Arma
+    inventario: list[ItemInventario]
+
+
+# ── LLM con structured output ───────────────────────────────────────────────
+# .with_structured_output(PersonajeStats) hace que el LLM devuelva directamente
+# una instancia de PersonajeStats validada, usando function calling por debajo.
+_llm = ChatOpenAI(model=MODEL_NAME, temperature=0.3).with_structured_output(PersonajeStats)
 
 with open(CREADOR_PERSONAJE_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt desde el archivo de texto
     _PROMPT = f.read().strip()
@@ -25,18 +72,13 @@ def crear_personaje(descripcion: str, campaña: dict = None) -> dict: # Genera l
         catalogo = json.dumps(campaña["armas"], ensure_ascii=False, indent=2)
         contenido_human += f"\n\nCatálogo de armas disponibles:\n{catalogo}"
 
-    respuesta = _llm.invoke([ # Llamamos al LLM con el prompt del sistema y el mensaje del jugador
+    personaje = _llm.invoke([ # Devuelve un PersonajeStats ya validado — no hay parseo manual
         SystemMessage(content=_PROMPT),
         HumanMessage(content=contenido_human)
     ])
 
-    contenido = respuesta.content
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido) # Buscamos si el LLM ha envuelto el JSON en un bloque markdown
-    if match:
-        contenido = match.group(1).strip() # Si lo ha hecho, extraemos solo el JSON del interior
-    stats = json.loads(contenido) # Parseamos el JSON a dict de Python
-
-    stats["vida_actual"] = stats.get("vida_max", 12) # Nos aseguramos de que el personaje empieza con la vida al máximo
+    stats = personaje.model_dump(by_alias=True, exclude_none=True) # Volcamos a dict usando los alias ("int" en vez de "int_"); exclude_none evita que los campos opcionales aparezcan como null
+    stats["vida_actual"] = stats["vida_max"] # Nos aseguramos de que el personaje empieza con la vida al máximo
 
     STATS_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe
     with open(STATS_PATH, 'w', encoding='utf-8') as f: # Guardamos la ficha en stats.json
