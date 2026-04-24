@@ -36,7 +36,7 @@ TIPOS DE BEAT VÁLIDOS:
 - "climax": la batalla final. Incluye "enemigos". SOLO puede haber UNO y es el último beat del acto 3
 - "trampa": obstáculo ambiental. Incluye "check" y "efecto_fallo"
 
-ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
+ESTRUCTURA DE LOS CAMPOS (el formato lo enforza el schema, tú solo preocúpate por rellenar el contenido):
 {{
   "titulo": "string",
   "gancho": "string - la situación inicial que motiva al jugador",

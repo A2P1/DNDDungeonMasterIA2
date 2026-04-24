@@ -4,10 +4,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del p
 
 import json
 from typing import Literal, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from dotenv import load_dotenv
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from config import ENRIQUECEDOR_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERATURE_ENRIQUECEDOR
+
+load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key sin depender del orden de imports
 
 with open(ENRIQUECEDOR_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt del enriquecedor desde el archivo de texto
     system_prompt = f.read().strip()
@@ -119,13 +122,50 @@ def _encontrar_beat_npc(campaña: dict, nombre_npc: str) -> str: # Busca en qué
     return "general" # Si no aparece en ningún beat concreto, lo marcamos como general
 
 
+MAX_REINTENTOS = 2
+
+
+def _armas_fuera_de_catalogo(entidades: dict, catalogo: list) -> list: # Devuelve armas de enemigos y loot que no están en el catálogo de la campaña
+    if not catalogo: # Sin catálogo no hay nada que validar
+        return []
+    nombres_catalogo = {a["nombre"].lower() for a in catalogo} # Set de nombres normalizados para lookup case-insensitive
+    faltantes = []
+    for enemigo in entidades.get("enemigos", []): # Recorremos cada enemigo
+        arma = enemigo.get("arma", "")
+        if arma and arma.lower() not in nombres_catalogo:
+            faltantes.append(arma)
+        for item in enemigo.get("loot", []): # Y las armas que sueltan como loot
+            if item.get("tipo") == "arma":
+                nombre = item.get("nombre", "")
+                if nombre and nombre.lower() not in nombres_catalogo:
+                    faltantes.append(nombre)
+    return faltantes
+
+
 def enriquecer_entidades(campaña: dict) -> dict: # Toma las plantillas básicas, las manda al LLM para completarlas y guarda el resultado en entidades.json
     raw = extraer_entidades_raw(campaña) # Extraemos las plantillas básicas de la campaña
     raw_json = json.dumps(raw, indent=2, ensure_ascii=False) # Las convertimos a JSON para pasárselas al LLM
-    catalogo = json.dumps(campaña.get("armas", []), indent=2, ensure_ascii=False) # También le pasamos el catálogo de armas para que asigne armas coherentes
+    catalogo_armas = campaña.get("armas", []) # Catálogo de armas de la campaña para validación semántica posterior
+    catalogo = json.dumps(catalogo_armas, indent=2, ensure_ascii=False) # También se lo pasamos al LLM para que asigne armas coherentes
 
-    resultado = chain_enriquecedor.invoke({"entidades_raw": raw_json, "catalogo_armas": catalogo}) # Devuelve una instancia de EntidadesEnriquecidas validada
+    ultimo_error: Exception | None = None
+    for intento in range(1, MAX_REINTENTOS + 1):
+        try:
+            resultado = chain_enriquecedor.invoke({"entidades_raw": raw_json, "catalogo_armas": catalogo}) # Devuelve una instancia de EntidadesEnriquecidas validada
+            break
+        except ValidationError as e: # Pydantic rechazó la respuesta (ej: atributo > 5, rol fuera de los valores válidos): reintentamos
+            ultimo_error = e
+            print(f"⚠️  Intento {intento}/{MAX_REINTENTOS} falló validación Pydantic ({e.error_count()} errores). Reintentando...")
+    else:
+        raise RuntimeError(
+            "El enriquecedor no consiguió generar fichas que cumplieran el esquema tras varios intentos."
+        ) from ultimo_error
+
     entidades = resultado.model_dump(by_alias=True, exclude_none=True) # Volcamos a dict usando alias ("int" en vez de "int_") y omitiendo campos opcionales no aplicables
+
+    faltantes = _armas_fuera_de_catalogo(entidades, catalogo_armas) # Validación semántica post-hoc: aviso si el LLM asignó armas fuera del catálogo
+    if faltantes:
+        print(f"⚠️  Armas asignadas a entidades fuera del catálogo: {faltantes}. Se aceptan igualmente pero pueden ser inconsistentes.")
 
     ENTIDADES_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe
     with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f: # Guardamos las fichas generadas en entidades.json

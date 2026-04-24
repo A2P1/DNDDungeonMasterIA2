@@ -21,7 +21,7 @@ REGLAS:
   - neutral: disposicion "indiferente"
   - traidor: disposicion "amistoso" (aparenta ser aliado)
 
-ESTRUCTURA JSON EXACTA (responde SOLO con el JSON, sin texto antes ni después):
+ESTRUCTURA DE LOS CAMPOS (el formato lo enforza el schema, tú solo preocúpate por rellenar el contenido):
 {{
   "enemigos": [
     {{

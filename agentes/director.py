@@ -3,11 +3,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del proyecto al path para que los imports funcionen
 
 import json
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.exceptions import OutputParserException
 from config import DIRECTOR_PROMPT_PATH, CAMPAIGN_PATH, MODEL_NAME
+
+load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key sin depender del orden de imports
 
 with open(DIRECTOR_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt del director desde el archivo de texto
     system_prompt = f.read().strip()

@@ -16,7 +16,7 @@ Clases y sus puntos fuertes típicos:
 - Bardo: car alto (4-5), des medio, int medio
 - Paladín: fue alto (3-4), car alto, con alto
 
-Responde SOLO con JSON válido, sin texto extra, con esta estructura exacta:
+Estructura de los campos (el formato lo enforza el schema, tú solo preocúpate por rellenar el contenido):
 {
   "nombre": "<nombre del personaje>",
   "clase": "<clase principal en una palabra>",

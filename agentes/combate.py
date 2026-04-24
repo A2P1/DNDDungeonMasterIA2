@@ -31,7 +31,7 @@ class EvaluacionAccion(BaseModel):
     razon: Optional[str] = None
     tipo: Optional[Literal["ataque", "accion"]] = None
     atributo: Optional[Literal["fue", "des", "con", "int", "sab", "car"]] = None
-    dc: Optional[int] = Field(default=None, ge=8, le=18)
+    dc: Optional[int] = Field(default=None, ge=8, le=20) # Escala del prompt: 8 fácil ... 20 casi imposible
     dado_daño: Optional[str] = None
     objetivo: Optional[str] = None
     efecto_exito: Optional[str] = None
