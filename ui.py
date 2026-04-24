@@ -58,9 +58,17 @@ def derrota_msg(texto: str): # Imprime el mensaje de derrota en rojo
     print(f"{RED}{texto}{RESET}\n")
 
 
-def prompt_jugador(texto: str = "¿Qué haces?") -> str: # Muestra el prompt del jugador y espera su input
-    return input(f"\n{BOLD}{GREEN}🧙 Tú > {RESET}").strip() # Quitamos espacios al principio y al final
+def prompt_jugador(texto: str = "¿Qué haces?") -> str: # Muestra el prompt del jugador y espera su input. Rechaza entradas vacías
+    while True:
+        respuesta = input(f"\n{BOLD}{GREEN}🧙 Tú > {RESET}").strip() # Quitamos espacios al principio y al final
+        if respuesta:
+            return respuesta
+        print(f"{YELLOW}Escribe algo antes de pulsar Enter.{RESET}")
 
 
-def prompt_input(texto: str) -> str: # Muestra un prompt genérico para pedir datos al jugador (menús, creación de personaje...)
-    return input(f"{BOLD}{GREEN}> {RESET}{texto}: ").strip()
+def prompt_input(texto: str) -> str: # Muestra un prompt genérico para pedir datos al jugador (menús, creación de personaje...). Rechaza entradas vacías
+    while True:
+        respuesta = input(f"{BOLD}{GREEN}> {RESET}{texto}: ").strip()
+        if respuesta:
+            return respuesta
+        print(f"{YELLOW}Escribe algo antes de pulsar Enter.{RESET}")
