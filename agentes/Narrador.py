@@ -56,12 +56,29 @@ def narrador(user_input): # Procesa la acción del jugador y devuelve la narraci
                 tool_call_id=tool_call["id"] # El id que vincula este resultado con la llamada original
             ))
 
-        respuesta_final = llm_tools.invoke([ # Ahora sí, llamamos al LLM con TODOS los resultados de las herramientas de una vez
-            SystemMessage(content=system_prompt), # El prompt del sistema siempre primero
-            HumanMessage(content=user_input), # La acción del jugador
-            respuesta, # La respuesta del LLM con las tool calls
-            *tool_messages # Todos los resultados de las herramientas desempaquetados
-        ])
+        respuesta_final = llm_tools.invoke( # Pasamos messages[] para que el narrador conserve la memoria de turnos anteriores al usar tools
+            messages + [
+                HumanMessage(content=user_input), # La acción del jugador
+                respuesta, # AIMessage con tool_calls — OpenAI exige que vaya entre el HumanMessage y los ToolMessage
+                *tool_messages # Todos los resultados de las herramientas desempaquetados
+            ]
+        )
+
+        # Persistimos el turno en messages[] para que la siguiente vuelta vea esta interacción.
+        # Solo guardamos input y narración final: el resultado del tool ya quedó incorporado en la narración (no necesitamos cargar tool_calls/tool_results en el historial).
+        messages.append(HumanMessage(content=user_input))
+        messages.append(AIMessage(content=respuesta_final.content))
+
+        # Actualizamos el resumen igual que el camino sin tools, para que los turnos con dado/consulta contribuyan a la memoria a medio plazo
+        resumen_actual = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
+        resumen = llm.invoke([
+            SystemMessage(content="Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
+            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta_final.content}")
+        ]).content.strip()
+        RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
+            f.write(resumen + "\n")
+
         return respuesta_final.content # Devolvemos solo el texto de la narración final
 
     else: # Si el LLM no necesita herramientas, generamos la respuesta directamente
