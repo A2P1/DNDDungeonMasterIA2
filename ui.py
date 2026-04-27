@@ -58,6 +58,67 @@ def derrota_msg(texto: str): # Imprime el mensaje de derrota en rojo
     print(f"{RED}{texto}{RESET}\n")
 
 
+# ── Helpers de streaming ────────────────────────────────────────────────────
+# Se usan en triples inicio/chunk/fin: el caller imprime la cabecera con _inicio,
+# va recibiendo trocitos del LLM y los imprime con _chunk, y cierra con _fin.
+# Las versiones batch existentes (narrador_msg, combate_msg, etc.) siguen vivas
+# para llamadas que no necesitan UI streaming (como la API REST).
+
+def narrador_msg_inicio(): # Imprime el borde superior y la cabecera "📖 Narrador"
+    print(f"\n{SEPARADOR}")
+    print(f"{BOLD}{CYAN}📖 Narrador{RESET}")
+
+def narrador_msg_chunk(texto: str): # Imprime un trozo de la narración del DM en color blanco, sin saltar de línea
+    print(f"{WHITE}{texto}{RESET}", end="", flush=True)
+
+def narrador_msg_fin(): # Cierra con un newline y el borde inferior
+    print()
+    print(SEPARADOR)
+
+
+def combate_msg_inicio(): # Borde superior y cabecera "⚔️ Combate"
+    print(f"\n{SEPARADOR}")
+    print(f"{BOLD}{RED}⚔️  Combate{RESET}")
+
+def combate_msg_chunk(texto: str): # Trozo de narración de combate en blanco, inline
+    print(f"{WHITE}{texto}{RESET}", end="", flush=True)
+
+def combate_msg_fin(): # Newline y borde inferior
+    print()
+    print(SEPARADOR)
+
+
+def victoria_msg_inicio(): # Cabecera "🏆 ¡Victoria!" en verde, sin separador (igual que la versión batch)
+    print(f"\n{BOLD}{GREEN}🏆 ¡Victoria!{RESET}")
+
+def victoria_msg_chunk(texto: str): # Trozo de narración en verde, inline
+    print(f"{GREEN}{texto}{RESET}", end="", flush=True)
+
+def victoria_msg_fin(): # Cierre con newline extra para separar del siguiente bloque
+    print("\n")
+
+
+def derrota_msg_inicio(): # Cabecera "💀 Derrota..." en rojo
+    print(f"\n{BOLD}{RED}💀 Derrota...{RESET}")
+
+def derrota_msg_chunk(texto: str): # Trozo en rojo
+    print(f"{RED}{texto}{RESET}", end="", flush=True)
+
+def derrota_msg_fin():
+    print("\n")
+
+
+def enemigo_msg_inicio(nombre: str): # Cabecera con el nombre del enemigo, indentada y con la espada
+    print(f"\n  {BOLD}{MAGENTA}🗡️  {nombre}{RESET}")
+    print("  ", end="", flush=True) # Indentación inicial para que la primera línea de la narración quede alineada (líneas posteriores no se reindentan, igual que en la versión batch)
+
+def enemigo_msg_chunk(texto: str): # Trozo de la acción del enemigo en blanco
+    print(f"{WHITE}{texto}{RESET}", end="", flush=True)
+
+def enemigo_msg_fin():
+    print()
+
+
 def prompt_jugador(texto: str = "¿Qué haces?") -> str: # Muestra el prompt del jugador y espera su input. Rechaza entradas vacías
     while True:
         respuesta = input(f"\n{BOLD}{GREEN}🧙 Tú > {RESET}").strip() # Quitamos espacios al principio y al final
