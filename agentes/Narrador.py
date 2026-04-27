@@ -3,6 +3,7 @@ from pathlib import Path # Para manejar rutas de forma más cómoda
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz al path para que los imports del proyecto funcionen
 
 import json # Para parsear JSONs si hace falta
+from typing import Callable, Optional # Para tipar el callback opcional de streaming
 from dotenv import load_dotenv # Para cargar la API key desde el .env
 from langchain_openai import ChatOpenAI # El modelo de OpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage # Los tipos de mensaje que usamos en la conversación
@@ -43,8 +44,20 @@ messages = [ # Historial de mensajes de la sesión, empieza solo con el prompt d
 ]
 
 
-def narrador(user_input): # Procesa la acción del jugador y devuelve la narración correspondiente
-    respuesta = llm_tools.invoke(messages + [HumanMessage(content=user_input)]) # Le preguntamos al LLM qué hacer con la acción del jugador
+def _generar(llm_obj, msgs: list, on_chunk: Optional[Callable[[str], None]]) -> str: # Helper: si hay callback, streamea por chunks; si no, batch con .invoke()
+    if on_chunk is None: # Sin callback: comportamiento clásico de un solo bloque
+        return llm_obj.invoke(msgs).content
+    full_text = "" # Vamos acumulando los chunks para devolver el texto completo al final
+    for chunk in llm_obj.stream(msgs): # .stream() devuelve trocitos según los va generando el LLM
+        text = chunk.content or "" # Algunos chunks pueden venir con content vacío (metadatos), los ignoramos
+        if text:
+            on_chunk(text) # El caller decide qué hacer con el trozo (imprimirlo, mandarlo por SSE, etc.)
+            full_text += text
+    return full_text
+
+
+def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
+    respuesta = llm_tools.invoke(messages + [HumanMessage(content=user_input)]) # Primera llamada en batch: rápida, decide si hace falta tool. Si trae texto, no lo streameamos (raro y se pierde como antes)
 
     if respuesta.tool_calls: # Si el LLM quiere usar herramientas, las ejecutamos todas antes de pedir la respuesta final
         tool_messages = [] # Aquí guardamos los resultados de cada herramienta
@@ -56,30 +69,34 @@ def narrador(user_input): # Procesa la acción del jugador y devuelve la narraci
                 tool_call_id=tool_call["id"] # El id que vincula este resultado con la llamada original
             ))
 
-        respuesta_final = llm_tools.invoke( # Pasamos messages[] para que el narrador conserve la memoria de turnos anteriores al usar tools
+        # Segunda llamada (la que produce la narración real): aquí sí se streamea si hay callback.
+        # Pasamos messages[] para que el narrador conserve la memoria de turnos anteriores al usar tools.
+        contenido_final = _generar(
+            llm_tools,
             messages + [
                 HumanMessage(content=user_input), # La acción del jugador
                 respuesta, # AIMessage con tool_calls — OpenAI exige que vaya entre el HumanMessage y los ToolMessage
                 *tool_messages # Todos los resultados de las herramientas desempaquetados
-            ]
+            ],
+            on_chunk
         )
 
         # Persistimos el turno en messages[] para que la siguiente vuelta vea esta interacción.
         # Solo guardamos input y narración final: el resultado del tool ya quedó incorporado en la narración (no necesitamos cargar tool_calls/tool_results en el historial).
         messages.append(HumanMessage(content=user_input))
-        messages.append(AIMessage(content=respuesta_final.content))
+        messages.append(AIMessage(content=contenido_final))
 
         # Actualizamos el resumen igual que el camino sin tools, para que los turnos con dado/consulta contribuyan a la memoria a medio plazo
         resumen_actual = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
-        resumen = llm.invoke([
+        resumen = llm.invoke([ # El resumen no se streamea: es interno, el usuario no lo ve
             SystemMessage(content="Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
-            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta_final.content}")
+            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {contenido_final}")
         ]).content.strip()
         RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(RESUMEN_PATH, 'a', encoding='utf-8') as f:
             f.write(resumen + "\n")
 
-        return respuesta_final.content # Devolvemos solo el texto de la narración final
+        return contenido_final # Devolvemos solo el texto de la narración final
 
     else: # Si el LLM no necesita herramientas, generamos la respuesta directamente
         messages.append(SystemMessage(content='MODO_INICIO: NO')) # Le decimos que no es el inicio, ya hay contexto previo
@@ -87,22 +104,22 @@ def narrador(user_input): # Procesa la acción del jugador y devuelve la narraci
         messages.append(SystemMessage(content=f'IMPORTANTE. No es tu primera intervención. Resumen: {resumen_actual}')) # Le pasamos el resumen como contexto
 
         messages.append(HumanMessage(content=user_input)) # Añadimos la acción del jugador al historial
-        respuesta = llm.invoke(messages) # Generamos la respuesta narrativa
-        messages.append(AIMessage(content=respuesta.content)) # Guardamos la respuesta en el historial para mantener continuidad
+        contenido = _generar(llm, messages, on_chunk) # Streameamos si hay callback, batch si no
+        messages.append(AIMessage(content=contenido)) # Guardamos la respuesta en el historial para mantener continuidad
 
-        resumen = llm.invoke([ # Actualizamos el resumen de la partida con lo que acaba de pasar
+        resumen = llm.invoke([ # Actualizamos el resumen de la partida con lo que acaba de pasar (sin streaming, es interno)
             SystemMessage(content="Actualiza el resumen de la partida en un máximo de 2 frases. Mantén la continuidad y los detalles clave, no te inventes cosas no mencionadas"),
-            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {respuesta.content}")
+            HumanMessage(content=f"Resumen anterior: {resumen_actual} \nNueva información: {user_input} \nRespuesta de la IA: {contenido}")
         ]).content.strip() # Limpiamos el texto del resumen
 
         RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe todavía
         with open(RESUMEN_PATH, 'a', encoding='utf-8') as f: # Abrimos en modo append para no perder el historial de resúmenes
             f.write(resumen + "\n") # Añadimos el nuevo resumen al archivo
 
-        return respuesta.content # Devolvemos la narración al jugador
+        return contenido # Devolvemos la narración al jugador
 
 
-def narrador_inicio(campaña: dict = None): # Genera la narración de apertura de la partida con el contexto de la campaña
+def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], None]] = None): # Genera la narración de apertura. Si se pasa on_chunk, streamea
     messages.append(SystemMessage(content='MODO_INICIO: SI')) # Le avisamos al LLM de que es el arranque de la partida
 
     if campaña: # Si nos pasan la campaña, construimos el contexto para que el LLM sepa dónde está el jugador
@@ -118,16 +135,16 @@ def narrador_inicio(campaña: dict = None): # Genera la narración de apertura d
 
     messages.append(HumanMessage(content='Inicia la partida. Presenta la escena usando el gancho y la ambientación de la campaña.')) # Le pedimos que arranque la historia
 
-    respuesta = llm.invoke(messages) # Generamos la narración de apertura
-    messages.append(AIMessage(content=respuesta.content)) # Guardamos la respuesta en el historial
+    contenido = _generar(llm, messages, on_chunk) # Streameamos la apertura si hay callback, batch si no
+    messages.append(AIMessage(content=contenido)) # Guardamos la respuesta en el historial
 
-    resumen = llm.invoke([ # Generamos el primer resumen de la partida para tener un punto de partida en el historial
+    resumen = llm.invoke([ # Generamos el primer resumen de la partida (sin streaming, es interno)
         SystemMessage(content="Resume en una frase corta lo que ha ocurrido"),
-        HumanMessage(content=f"Resumen de la historia: {respuesta.content}") # Le pasamos la narración de apertura para que la resuma
+        HumanMessage(content=f"Resumen de la historia: {contenido}") # Le pasamos la narración de apertura para que la resuma
     ]).content.strip() # Limpiamos el resumen
 
     RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe
     with open(RESUMEN_PATH, 'a', encoding='utf-8') as f: # Guardamos el primer resumen en el archivo
         f.write(resumen + "\n")
 
-    return respuesta.content # Devolvemos la narración de apertura al jugador
+    return contenido # Devolvemos la narración de apertura al jugador
