@@ -3,10 +3,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del proyecto al path para que los imports funcionen
 
 import json
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.exceptions import OutputParserException
 from config import DIRECTOR_PROMPT_PATH, CAMPAIGN_PATH, MODEL_NAME
+
+load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key sin depender del orden de imports
 
 with open(DIRECTOR_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt del director desde el archivo de texto
     system_prompt = f.read().strip()
@@ -24,11 +28,26 @@ llm = ChatOpenAI(model=MODEL_NAME, temperature=0.9) # Temperatura alta para que 
 chain_director = prompt | llm | parser # Chain completa: rellenamos el prompt → LLM lo procesa → parseamos el JSON
 
 
+MAX_REINTENTOS = 2
+
+
 def generar_campaña(tema: str, personaje: str) -> dict: # Genera la campaña completa y la guarda en campaign.json
-    campaña = chain_director.invoke({ # Ejecutamos la chain con el tema y el personaje del jugador
-        "tema": tema,
-        "personaje": personaje
-    })
+    ultimo_error: Exception | None = None
+    for intento in range(1, MAX_REINTENTOS + 1):
+        try:
+            campaña = chain_director.invoke({ # Ejecutamos la chain con el tema y el personaje del jugador
+                "tema": tema,
+                "personaje": personaje
+            })
+            break
+        except OutputParserException as e: # El LLM devolvió texto en vez de JSON (rechazos espurios, prosa extra): reintentamos
+            ultimo_error = e
+            print(f"⚠️  Intento {intento}/{MAX_REINTENTOS} falló al parsear JSON. Reintentando...")
+    else:
+        raise RuntimeError(
+            "El LLM no devolvió un JSON válido tras varios intentos. "
+            "Prueba a reformular el tema o el personaje."
+        ) from ultimo_error
 
     CAMPAIGN_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe
     with open(CAMPAIGN_PATH, 'w', encoding='utf-8') as f: # Guardamos la campaña generada en campaign.json

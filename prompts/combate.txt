@@ -19,7 +19,7 @@ Esto incluye CUALQUIER acción: ataques directos, acciones creativas, huida, etc
 
 Solo existen dos tipos de acción: "ataque" y "accion".
 
-Responde SOLO con un JSON (sin texto antes ni después) con esta estructura:
+Campos que debes rellenar en la evaluación (el formato lo enforza el schema, tú solo preocúpate por el contenido):
 {{
   "viable": true/false,
   "razon": "string - por qué no es viable (solo si viable es false)",

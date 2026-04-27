@@ -3,10 +3,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del proyecto al path para que los imports funcionen
 
 import json
+from typing import Literal, Optional
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.output_parsers import JsonOutputParser
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_estado_combate
 from tools.dados import tirar_d20, tirar_dado
 from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
@@ -18,9 +19,30 @@ load_dotenv() # Cargamos las variables de entorno (.env) para tener acceso a la 
 with open(COMBATE_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt de combate desde el archivo de texto
     system_prompt_combate = f.read().strip()
 
+
+# ── Esquema estructurado para la evaluación de acciones ─────────────────────
+# viable es lo único siempre obligatorio; el resto son opcionales porque su
+# relevancia depende del tipo de acción (un "usa_item" no necesita dc ni atributo,
+# un "viable: false" no necesita dado_daño, etc.). El downstream usa .get() con
+# defaults, así que los campos ausentes no rompen nada.
+
+class EvaluacionAccion(BaseModel):
+    viable: bool
+    razon: Optional[str] = None
+    tipo: Optional[Literal["ataque", "accion"]] = None
+    atributo: Optional[Literal["fue", "des", "con", "int", "sab", "car"]] = None
+    dc: Optional[int] = Field(default=None, ge=8, le=20) # Escala del prompt: 8 fácil ... 20 casi imposible
+    dado_daño: Optional[str] = None
+    objetivo: Optional[str] = None
+    efecto_exito: Optional[str] = None
+    efecto_fallo: Optional[str] = None
+    termina_combate: bool = False
+    motivo_fin: Optional[str] = None
+    usa_item: Optional[str] = None
+
+
 llm = ChatOpenAI(model=MODEL_NAME, temperature=0.9) # LLM para narrar, temperatura alta para respuestas más creativas
-llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3) # LLM para evaluar acciones, temperatura baja para respuestas más consistentes
-parser = JsonOutputParser() # Parseador para convertir la respuesta del LLM a un dict de Python
+llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3).with_structured_output(EvaluacionAccion) # Structured output fuerza al LLM a rellenar el esquema exacto
 
 
 def _modificador(valor: int) -> int: # El atributo (0-5) se usa directamente como modificador (Cosmere RPG)
@@ -48,14 +70,14 @@ def _narrar(contexto: str) -> str: # Le pasa el contexto al LLM en modo NARRAR y
 
 
 def _evaluar_accion(accion: str, contexto_combate: str) -> dict: # Le pasa la acción del jugador al LLM en modo EVALUAR y devuelve un dict con el resultado
-    respuesta = llm_evaluar.invoke([
-        SystemMessage(content=system_prompt_combate + "\n\nMODO: EVALUAR ACCIÓN"), # Le decimos al LLM que tiene que evaluar la acción
-        HumanMessage(content=f"Contexto del combate:\n{contexto_combate}\n\nAcción del jugador: {accion}")
-    ])
     try:
-        return parser.parse(respuesta.content) # Intentamos parsear la respuesta como JSON
+        evaluacion = llm_evaluar.invoke([ # Devuelve un EvaluacionAccion validado (structured output)
+            SystemMessage(content=system_prompt_combate + "\n\nMODO: EVALUAR ACCIÓN"), # Le decimos al LLM que tiene que evaluar la acción
+            HumanMessage(content=f"Contexto del combate:\n{contexto_combate}\n\nAcción del jugador: {accion}")
+        ])
+        return evaluacion.model_dump(exclude_none=True) # exclude_none mantiene el comportamiento previo: .get(campo, default) recibe el default si el campo no aplica
     except Exception:
-        return {"viable": False, "razon": "No se pudo interpretar la acción"} # Si falla el parseo devolvemos acción no viable
+        return {"viable": False, "razon": "No se pudo interpretar la acción"} # Fallback si la llamada al LLM falla o la validación Pydantic explota
 
 
 def _get_vivos(entidades: list) -> list: # Recorre la lista de entidades y devuelve solo las que siguen vivas según entidades.json

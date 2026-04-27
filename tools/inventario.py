@@ -3,8 +3,10 @@ from pathlib import Path # Para manejar rutas de forma cómoda
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz al path para que los imports del proyecto funcionen
 
 import json # Para leer y escribir el stats.json
-import re # Para extraer JSON de bloques markdown que devuelve el LLM
+import re # Para extraer dados de efectos (ej: "2d4" en pociones)
+from typing import Optional
 from dotenv import load_dotenv # Para cargar la API key desde el .env
+from pydantic import BaseModel
 from langchain_core.tools import tool # Decorador que convierte funciones en tools para el LLM
 from langchain_openai import ChatOpenAI # El LLM que usamos para detectar armas en la acción
 from langchain_core.messages import SystemMessage, HumanMessage # Tipos de mensaje para el LLM
@@ -12,7 +14,13 @@ from config import STATS_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Ruta a stats.jso
 
 load_dotenv() # Cargamos la API key del .env
 
-_llm = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA) # LLM de baja temperatura para decisiones lógicas como detectar armas
+
+class DeteccionArma(BaseModel): # Esquema estructurado para la detección de armas en la acción
+    arma_mencionada: Optional[str] = None # Nombre del arma que menciona el jugador, o null si no menciona ninguna
+    en_inventario: bool # Si el arma mencionada coincide con alguna del inventario
+
+
+_llm = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA).with_structured_output(DeteccionArma) # LLM con structured output: devuelve directamente un DeteccionArma validado
 
 
 @tool
@@ -110,40 +118,30 @@ def verificar_arma_en_accion(accion: str, armas: list) -> dict: # Detecta si el 
 
     nombres = [a["nombre"] for a in armas] # Extraemos los nombres de las armas para pasárselos al LLM
 
-    respuesta = _llm.invoke([ # Le preguntamos al LLM si el jugador menciona alguna de sus armas
-        SystemMessage(content=(
-            "Eres un detector de armas en acciones de combate de rol. "
-            "Dado el inventario de armas del jugador y su acción, determina:\n"
-            "1. ¿El jugador menciona usar algún arma específica?\n"
-            "2. Si menciona un arma, ¿está en el inventario? "
-            "Busca coincidencias flexibles: 'espada' coincide con 'espada larga', "
-            "'el hacha' con 'hacha de guerra', 'mi daga' con 'daga', etc.\n"
-            "Responde SOLO con JSON válido, sin texto extra:\n"
-            '{"arma_mencionada": "<nombre exacto del inventario si coincide, '
-            'o el nombre que dijo el jugador si no coincide, o null si no menciona ninguna>", '
-            '"en_inventario": true | false}'
-        )),
-        HumanMessage(content=f"Armas en inventario: {nombres}\nAcción del jugador: {accion}")
-    ])
-
     try:
-        contenido = respuesta.content # Guardamos el texto de la respuesta
-        match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido) # Por si el LLM envuelve el JSON en bloques markdown
-        if match:
-            contenido = match.group(1).strip() # Extraemos el JSON del interior del bloque
-        resultado = json.loads(contenido) # Parseamos el JSON de la respuesta
+        resultado = _llm.invoke([ # Devuelve un DeteccionArma ya validado gracias a structured output
+            SystemMessage(content=(
+                "Eres un detector de armas en acciones de combate de rol. "
+                "Dado el inventario de armas del jugador y su acción, determina:\n"
+                "1. ¿El jugador menciona usar algún arma específica? Si no, arma_mencionada debe ser null.\n"
+                "2. Si menciona un arma, ¿está en el inventario? "
+                "Busca coincidencias flexibles: 'espada' coincide con 'espada larga', "
+                "'el hacha' con 'hacha de guerra', 'mi daga' con 'daga', etc.\n"
+                "Si coincide, devuelve el nombre exacto del inventario. Si no coincide, devuelve el nombre tal cual lo dijo."
+            )),
+            HumanMessage(content=f"Armas en inventario: {nombres}\nAcción del jugador: {accion}")
+        ])
 
-        nombre = resultado.get("arma_mencionada") # El nombre del arma que el jugador mencionó (o null)
-        en_inventario = resultado.get("en_inventario", False) # Si el arma está en el inventario
+        nombre = resultado.arma_mencionada # Nombre del arma mencionada (o None)
 
         if not nombre: # Si el LLM dice que no se menciona ningún arma, devolvemos no_mencionada
             return {"estado": "no_mencionada", "arma": None, "nombre": None}
 
-        if en_inventario: # Si el arma está en el inventario, buscamos su ficha completa
+        if resultado.en_inventario: # Si el arma está en el inventario, buscamos su ficha completa
             arma = next((a for a in armas if a["nombre"].lower() == nombre.lower()), None) # Buscamos el objeto arma por nombre
             if arma:
                 return {"estado": "encontrada", "arma": arma, "nombre": nombre} # Devolvemos el arma encontrada
 
         return {"estado": "no_en_inventario", "arma": None, "nombre": nombre} # Si no está en el inventario, avisamos con el nombre que dijo
     except Exception:
-        return {"estado": "no_mencionada", "arma": None, "nombre": None} # Si algo falla, asumimos que no se menciona arma
+        return {"estado": "no_mencionada", "arma": None, "nombre": None} # Si la llamada falla, asumimos que no se menciona arma
