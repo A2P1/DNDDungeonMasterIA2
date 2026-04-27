@@ -16,8 +16,11 @@ from tools.inventario import add_item_to_inventory # Para añadir loot al invent
 from tools.entidades import get_info_entidad # Para consultar el estado de una entidad concreta
 
 from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Rutas y configuración general
-from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funciones de la UI para mostrar mensajes con color/formato
-                sistema_msg, titulo_msg, prompt_jugador, prompt_input)
+from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funciones batch de la UI (siguen usándose en sitios sin streaming)
+                sistema_msg, titulo_msg, prompt_jugador, prompt_input,
+                narrador_msg_inicio, narrador_msg_chunk, narrador_msg_fin, # Helpers de streaming para narración estándar
+                victoria_msg_inicio, victoria_msg_chunk, victoria_msg_fin, # Helpers de streaming para narración de victoria
+                derrota_msg_inicio, derrota_msg_chunk, derrota_msg_fin) # Helpers de streaming para narración de derrota
 
 _llm_detector = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA) # LLM de baja temperatura para decisiones lógicas (detectar ataques, objetivos...)
 _parser_detector = JsonOutputParser() # Parser para las respuestas JSON del LLM detector
@@ -263,7 +266,12 @@ def main(): # Bucle principal del juego
     while True: # Bucle principal de la partida
         beat_combate = _beat_es_combate() # Comprobamos si toca combate antes de pedir input al jugador
         if beat_combate: # Si el siguiente beat es de combate, lo resolvemos sin esperar input
-            narrador_msg(narrador(f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento.")) # El narrador introduce el combate
+            narrador_msg_inicio() # El narrador introduce el combate (streaming)
+            narrador(
+                f"[SISTEMA] El jugador llega al momento: {beat_combate['descripcion']}. Narra la aparición de los enemigos y la tensión del momento.",
+                on_chunk=narrador_msg_chunk
+            )
+            narrador_msg_fin()
 
             entidades_beat = _get_entidades_presentes() # Obtenemos las entidades del beat
             for e in entidades_beat: # Marcamos todas como enemigos para el sistema de combate
@@ -274,17 +282,29 @@ def main(): # Bucle principal del juego
                 marcar_beat_completado.invoke({"beat_id": beat_combate["id"]}) # Marcamos el beat como superado
                 loot = _recoger_loot(entidades_beat) # Recogemos el loot de los enemigos muertos
                 loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else "" # Texto del loot para el narrador
-                texto = narrador(f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}.{loot_fragment} Narra las consecuencias de la victoria y guía hacia lo que viene después.")
-                victoria_msg(texto) # Mostramos la narración de victoria
+                victoria_msg_inicio() # Mostramos la narración de victoria (streaming)
+                narrador(
+                    f"[SISTEMA] El jugador ha ganado el combate en: {beat_combate['descripcion']}.{loot_fragment} Narra las consecuencias de la victoria y guía hacia lo que viene después.",
+                    on_chunk=victoria_msg_chunk
+                )
+                victoria_msg_fin()
             elif resultado == "resolucion": # Si el jugador resolvió el combate sin matar a todos (huida, negociación...)
                 marcar_beat_completado.invoke({"beat_id": beat_combate["id"]}) # El beat también queda superado
                 loot = _recoger_loot(entidades_beat) # Recogemos loot de los que sí murieron durante el combate
                 loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else "" # Texto del loot
-                texto = narrador(f"[SISTEMA] El jugador ha resuelto el combate en: {beat_combate['descripcion']} de forma narrativa (huida, negociación, intimidación, etc.) sin matar a todos los enemigos.{loot_fragment} Narra el desenlace y guía hacia lo que viene después.")
-                narrador_msg(texto) # Mostramos la narración del desenlace
+                narrador_msg_inicio() # Mostramos la narración del desenlace (streaming)
+                narrador(
+                    f"[SISTEMA] El jugador ha resuelto el combate en: {beat_combate['descripcion']} de forma narrativa (huida, negociación, intimidación, etc.) sin matar a todos los enemigos.{loot_fragment} Narra el desenlace y guía hacia lo que viene después.",
+                    on_chunk=narrador_msg_chunk
+                )
+                narrador_msg_fin()
             else: # Si el jugador fue derrotado
-                texto = narrador(f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída.")
-                derrota_msg(texto) # Mostramos la narración de derrota
+                derrota_msg_inicio() # Mostramos la narración de derrota (streaming)
+                narrador(
+                    f"[SISTEMA] El jugador ha sido derrotado en: {beat_combate['descripcion']}. Narra su caída.",
+                    on_chunk=derrota_msg_chunk
+                )
+                derrota_msg_fin()
                 break # Terminamos la partida
             continue # Volvemos al inicio del bucle para comprobar el siguiente beat
 
@@ -322,25 +342,35 @@ def main(): # Bucle principal del juego
                     if resultado == "resolucion": # Si se resolvió narrativamente, narramos el desenlace y continuamos
                         loot = _recoger_loot(entidades) # Recogemos loot de los que murieron
                         loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
-                        narrador_msg(narrador(
+                        narrador_msg_inicio() # Streaming
+                        narrador(
                             f"[SISTEMA] El combate contra {nombres_derrotados} ha terminado de forma narrativa (huida, negociación, intimidación, etc.) sin matarles a todos.{loot_fragment} "
-                            f"Narra el desenlace y continúa la historia."
-                        ))
+                            f"Narra el desenlace y continúa la historia.",
+                            on_chunk=narrador_msg_chunk
+                        )
+                        narrador_msg_fin()
                         continue # Volvemos al inicio del bucle
 
                     loot = _recoger_loot(entidades) # Si fue victoria, recogemos el loot
                     loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
-                    narrador_msg(narrador( # Narramos las consecuencias de la victoria
+                    narrador_msg_inicio() # Narramos las consecuencias de la victoria (streaming)
+                    narrador(
                         f"[SISTEMA] El jugador acaba de derrotar en combate a: {nombres_derrotados}. "
                         f"Esas criaturas/personajes han muerto y ya no están presentes.{loot_fragment} "
-                        f"Narra las consecuencias de la victoria y continúa la historia."
-                    ))
+                        f"Narra las consecuencias de la victoria y continúa la historia.",
+                        on_chunk=narrador_msg_chunk
+                    )
+                    narrador_msg_fin()
                     continue # Volvemos al inicio del bucle
 
-            narrador_msg(narrador(user_input)) # Si no hay combate, el narrador procesa la acción normalmente
+            narrador_msg_inicio() # Si no hay combate, el narrador procesa la acción normalmente (streaming)
+            narrador(user_input, on_chunk=narrador_msg_chunk)
+            narrador_msg_fin()
 
         else: # Si no hay resumen todavía, es el inicio de la partida
-            narrador_msg(narrador_inicio(campaña)) # El narrador genera la narración de apertura con el contexto de la campaña
+            narrador_msg_inicio() # El narrador genera la narración de apertura con el contexto de la campaña (streaming)
+            narrador_inicio(campaña, on_chunk=narrador_msg_chunk)
+            narrador_msg_fin()
 
 
 main() # Arrancamos el juego
