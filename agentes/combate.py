@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del proyecto al path para que los imports funcionen
 
 import json
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -61,12 +61,20 @@ def _guardar_jugador(jugador: dict): # Sobreescribe el stats.json con los datos 
         json.dump(jugador, f, indent=2, ensure_ascii=False)
 
 
-def _narrar(contexto: str) -> str: # Le pasa el contexto al LLM en modo NARRAR y devuelve el texto generado
-    respuesta = llm.invoke([
+def _narrar(contexto: str, on_chunk: Optional[Callable[[str], None]] = None) -> str: # Narra un turno de combate. Si se pasa on_chunk, streamea por chunks
+    msgs = [
         SystemMessage(content=system_prompt_combate + "\n\nMODO: NARRAR"), # Le decimos al LLM que solo tiene que narrar
         HumanMessage(content=contexto) # El contexto con lo que ha pasado en el turno
-    ])
-    return respuesta.content
+    ]
+    if on_chunk is None: # Sin callback: comportamiento batch como antes (la API REST y procesar_turno lo usan así)
+        return llm.invoke(msgs).content
+    full_text = "" # Acumulamos los chunks para devolver el texto completo al final
+    for chunk in llm.stream(msgs):
+        text = chunk.content or "" # Algunos chunks pueden venir vacíos (metadatos), los ignoramos
+        if text:
+            on_chunk(text) # El caller decide qué hacer con el trozo
+            full_text += text
+    return full_text
 
 
 def _evaluar_accion(accion: str, contexto_combate: str) -> dict: # Le pasa la acción del jugador al LLM en modo EVALUAR y devuelve un dict con el resultado
