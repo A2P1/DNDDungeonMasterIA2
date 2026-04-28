@@ -9,7 +9,7 @@ router = APIRouter( # Router de campaña, todos sus endpoints empiezan por /camp
     tags=["Campaña"] # Agrupa los endpoints en la documentación de Swagger
 )
 
-
+# Carga la campaña
 @router.get("/", response_model=CampañaResponse)
 def get_campaña(): # Devuelve la campaña activa, o 404 si no hay ninguna
     if not campaña_existe():

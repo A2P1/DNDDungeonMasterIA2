@@ -87,7 +87,7 @@ def usar_item(nombre_item: str) -> str:
 
     hp_recuperado = 0 # Inicializamos el HP recuperado a 0
     if "HP" in efecto.upper() or "hp" in efecto.lower(): # Si el efecto menciona HP, tiramos el dado de curación
-        match = re.search(r'(\d+)d(\d+)', efecto) # Buscamos el dado de curación en el texto del efecto (ej: "2d4")
+        match = re.search(r'(\d+)d(\d+)', efecto) # Buscamos el dado de curación en el texto del efecto
         if match:
             from tools.dados import tirar_dado # Import local para evitar importaciones circulares
             hp_recuperado = tirar_dado.invoke({"dado": match.group(0)}) # Tiramos el dado y guardamos el resultado
