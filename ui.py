@@ -1,3 +1,5 @@
+import time # Para la pausa por carácter del efecto máquina de escribir en streaming
+
 # Códigos de escape ANSI para dar color y formato al texto de la terminal
 RESET = "\033[0m" # Vuelve al estilo por defecto
 BOLD = "\033[1m" # Texto en negrita
@@ -56,6 +58,81 @@ def victoria_msg(texto: str): # Imprime el mensaje de victoria en verde
 def derrota_msg(texto: str): # Imprime el mensaje de derrota en rojo
     print(f"\n{BOLD}{RED}💀 Derrota...{RESET}")
     print(f"{RED}{texto}{RESET}\n")
+
+
+# ── Helpers de streaming ────────────────────────────────────────────────────
+# Se usan en triples inicio/chunk/fin: el caller imprime la cabecera con _inicio,
+# va recibiendo trocitos del LLM y los imprime con _chunk, y cierra con _fin.
+# Las versiones batch existentes (narrador_msg, combate_msg, etc.) siguen vivas
+# para llamadas que no necesitan UI streaming (como la API REST).
+
+# Velocidad del efecto máquina de escribir. OpenAI emite chunks en ráfagas irregulares;
+# imprimir letra a letra con una pausa fija suaviza el output a un ritmo constante.
+# 0.012 ≈ 80 caracteres/segundo. Subir si quieres más lento, bajar si demasiado lento.
+CHUNK_CHAR_DELAY = 0.012
+
+
+def _imprimir_chunk_lento(texto: str, color: str): # Imprime un chunk carácter a carácter con pausa fija para fluidez visual
+    print(color, end="", flush=True) # Activamos el color una sola vez al principio del chunk
+    for char in texto:
+        print(char, end="", flush=True)
+        time.sleep(CHUNK_CHAR_DELAY)
+    print(RESET, end="", flush=True) # Cerramos el color al final del chunk
+
+
+def narrador_msg_inicio(): # Imprime el borde superior y la cabecera "📖 Narrador"
+    print(f"\n{SEPARADOR}")
+    print(f"{BOLD}{CYAN}📖 Narrador{RESET}")
+
+def narrador_msg_chunk(texto: str): # Imprime un trozo de la narración del DM en blanco, letra a letra
+    _imprimir_chunk_lento(texto, WHITE)
+
+def narrador_msg_fin(): # Cierra con un newline y el borde inferior
+    print()
+    print(SEPARADOR)
+
+
+def combate_msg_inicio(): # Borde superior y cabecera "⚔️ Combate"
+    print(f"\n{SEPARADOR}")
+    print(f"{BOLD}{RED}⚔️  Combate{RESET}")
+
+def combate_msg_chunk(texto: str): # Trozo de narración de combate en blanco
+    _imprimir_chunk_lento(texto, WHITE)
+
+def combate_msg_fin(): # Newline y borde inferior
+    print()
+    print(SEPARADOR)
+
+
+def victoria_msg_inicio(): # Cabecera "🏆 ¡Victoria!" en verde, sin separador (igual que la versión batch)
+    print(f"\n{BOLD}{GREEN}🏆 ¡Victoria!{RESET}")
+
+def victoria_msg_chunk(texto: str): # Trozo de narración en verde
+    _imprimir_chunk_lento(texto, GREEN)
+
+def victoria_msg_fin(): # Cierre con newline extra para separar del siguiente bloque
+    print("\n")
+
+
+def derrota_msg_inicio(): # Cabecera "💀 Derrota..." en rojo
+    print(f"\n{BOLD}{RED}💀 Derrota...{RESET}")
+
+def derrota_msg_chunk(texto: str): # Trozo en rojo
+    _imprimir_chunk_lento(texto, RED)
+
+def derrota_msg_fin():
+    print("\n")
+
+
+def enemigo_msg_inicio(nombre: str): # Cabecera con el nombre del enemigo, indentada y con la espada
+    print(f"\n  {BOLD}{MAGENTA}🗡️  {nombre}{RESET}")
+    print("  ", end="", flush=True) # Indentación inicial para que la primera línea de la narración quede alineada (líneas posteriores no se reindentan, igual que en la versión batch)
+
+def enemigo_msg_chunk(texto: str): # Trozo de la acción del enemigo en blanco
+    _imprimir_chunk_lento(texto, WHITE)
+
+def enemigo_msg_fin():
+    print()
 
 
 def prompt_jugador(texto: str = "¿Qué haces?") -> str: # Muestra el prompt del jugador y espera su input. Rechaza entradas vacías

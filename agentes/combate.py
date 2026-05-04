@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz del proyecto al path para que los imports funcionen
 
 import json
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -12,7 +12,11 @@ from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_es
 from tools.dados import tirar_d20, tirar_dado
 from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
 from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME
-from ui import combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg
+from ui import (combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg, # Helpers batch (siguen vivos para procesar_turno y mensajes estáticos sin _narrar)
+                combate_msg_inicio, combate_msg_chunk, combate_msg_fin, # Streaming para narración de combate del jugador
+                enemigo_msg_inicio, enemigo_msg_chunk, enemigo_msg_fin, # Streaming para ataques de enemigos
+                victoria_msg_inicio, victoria_msg_chunk, victoria_msg_fin, # Streaming para narración de victoria
+                derrota_msg_inicio, derrota_msg_chunk, derrota_msg_fin) # Streaming para narración de derrota
 
 load_dotenv() # Cargamos las variables de entorno (.env) para tener acceso a la API key
 
@@ -61,12 +65,20 @@ def _guardar_jugador(jugador: dict): # Sobreescribe el stats.json con los datos 
         json.dump(jugador, f, indent=2, ensure_ascii=False)
 
 
-def _narrar(contexto: str) -> str: # Le pasa el contexto al LLM en modo NARRAR y devuelve el texto generado
-    respuesta = llm.invoke([
+def _narrar(contexto: str, on_chunk: Optional[Callable[[str], None]] = None) -> str: # Narra un turno de combate. Si se pasa on_chunk, streamea por chunks
+    msgs = [
         SystemMessage(content=system_prompt_combate + "\n\nMODO: NARRAR"), # Le decimos al LLM que solo tiene que narrar
         HumanMessage(content=contexto) # El contexto con lo que ha pasado en el turno
-    ])
-    return respuesta.content
+    ]
+    if on_chunk is None: # Sin callback: comportamiento batch como antes (la API REST y procesar_turno lo usan así)
+        return llm.invoke(msgs).content
+    full_text = "" # Acumulamos los chunks para devolver el texto completo al final
+    for chunk in llm.stream(msgs):
+        text = chunk.content or "" # Algunos chunks pueden venir vacíos (metadatos), los ignoramos
+        if text:
+            on_chunk(text) # El caller decide qué hacer con el trozo
+            full_text += text
+    return full_text
 
 
 def _evaluar_accion(accion: str, contexto_combate: str) -> dict: # Le pasa la acción del jugador al LLM en modo EVALUAR y devuelve un dict con el resultado
@@ -303,11 +315,14 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
         for e in entidades_presentes
     )
     arma_jugador = jugador.get("arma", {}).get("nombre", "sus puños") # Arma del jugador, si no tiene ninguna usa sus puños
-    combate_msg(_narrar( # Narramos la intro del combate (solo ambientación, sin resolver acción)
+    combate_msg_inicio() # Narramos la intro del combate (solo ambientación, sin resolver acción) — streaming
+    _narrar(
         f"El jugador ({jugador['nombre']}, armado con {arma_jugador}) se enfrenta a: {nombres}. "
         f"Describe cómo irrumpe el combate de forma brusca e imprevista, presentando a los enemigos y la tensión del momento. "
-        f"No resuelvas ningún ataque todavía."
-    ))
+        f"No resuelvas ningún ataque todavía.",
+        on_chunk=combate_msg_chunk
+    )
+    combate_msg_fin()
     _mostrar_estado(jugador, entidades_presentes) # Mostramos el estado inicial del combate
 
     while True: # Bucle principal de combate, un turno por iteración
@@ -326,10 +341,13 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             verificacion = verificar_arma_en_accion(accion, armas_inv) # Comprobamos si menciona un arma
             if verificacion["estado"] == "no_en_inventario": # Si el arma no está en el inventario, lo narramos y pedimos otra acción
                 nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
-                combate_msg(_narrar(
+                combate_msg_inicio()
+                _narrar(
                     f"El jugador intenta usar '{verificacion['nombre']}' pero no lo tiene. "
-                    f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma."
-                ))
+                    f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma.",
+                    on_chunk=combate_msg_chunk
+                )
+                combate_msg_fin()
                 continue
             elif verificacion["estado"] == "encontrada": # Si el arma existe, la guardamos para este turno y los siguientes
                 arma_turno = verificacion["arma"]
@@ -350,7 +368,9 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
 
         if not evaluacion.get("viable", False): # Si no es viable, narramos el motivo y pedimos otra acción
             razon = evaluacion.get("razon", "Eso no es posible aquí.")
-            combate_msg(_narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}"))
+            combate_msg_inicio()
+            _narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}", on_chunk=combate_msg_chunk)
+            combate_msg_fin()
             continue
 
         tipo = evaluacion.get("tipo", "accion") # "ataque" o "accion"
@@ -382,9 +402,12 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
         if item_name:
             resultado_item = usar_item.invoke({"nombre_item": item_name})
             jugador = _cargar_jugador() # Recargamos para reflejar cambios en HP e inventario
-            combate_msg(_narrar(
-                f"El jugador usa '{item_name}'. Resultado: {resultado_item}. Narra el uso del item con color."
-            ))
+            combate_msg_inicio()
+            _narrar(
+                f"El jugador usa '{item_name}'. Resultado: {resultado_item}. Narra el uso del item con color.",
+                on_chunk=combate_msg_chunk
+            )
+            combate_msg_fin()
         else:
             tirada = tirar_d20.invoke({}) # Tiramos el d20
             critico = (tirada == 20 and tipo == "ataque") # Nat 20 en ataque = crítico
@@ -393,20 +416,26 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
 
             if pifia: # Pifia: fallo automático con complicación narrativa
                 ventaja_enemigos = True # El jugador queda expuesto: los enemigos atacan con ventaja este turno
-                combate_msg(_narrar(
+                combate_msg_inicio()
+                _narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                     f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente y el jugador queda expuesto. "
                     f"Narra una complicación: el arma se atasca, el jugador tropieza, "
-                    f"se golpea a sí mismo o queda expuesto."
-                ))
+                    f"se golpea a sí mismo o queda expuesto.",
+                    on_chunk=combate_msg_chunk
+                )
+                combate_msg_fin()
             elif critico or total >= dc: # Acierto: crítico o supera la DC
                 if evaluacion.get("termina_combate"): # La acción resuelve el combate sin victoria ni derrota
                     motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
-                    combate_msg(_narrar(
+                    combate_msg_inicio()
+                    _narrar(
                         f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                         f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
-                        f"El combate termina: {motivo}. Narra el desenlace con tensión."
-                    ))
+                        f"El combate termina: {motivo}. Narra el desenlace con tensión.",
+                        on_chunk=combate_msg_chunk
+                    )
+                    combate_msg_fin()
                     return "resolucion"
 
                 dado_daño = evaluacion.get("dado_daño")
@@ -437,29 +466,41 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                     else:
                         msg_daño = "No hay objetivo al que aplicar el daño."
 
-                    combate_msg(_narrar( # Narramos el resultado del ataque
+                    combate_msg_inicio() # Narramos el resultado del ataque (streaming)
+                    _narrar(
                         f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                         f"{tirada}+{mod}={total} vs DC {dc}. "
-                        f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
-                    ))
+                        f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}",
+                        on_chunk=combate_msg_chunk
+                    )
+                    combate_msg_fin()
                 else: # Acción sin daño directo, narramos el efecto especial
                     efecto = evaluacion.get("efecto_exito", "")
-                    combate_msg(_narrar(
+                    combate_msg_inicio()
+                    _narrar(
                         f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                        f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
-                    ))
+                        f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}",
+                        on_chunk=combate_msg_chunk
+                    )
+                    combate_msg_fin()
             else: # Fallo: no llega a la DC
                 efecto = evaluacion.get("efecto_fallo", "")
-                combate_msg(_narrar(
+                combate_msg_inicio()
+                _narrar(
                     f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
-                ))
+                    f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}",
+                    on_chunk=combate_msg_chunk
+                )
+                combate_msg_fin()
 
         vivos_actual = _get_vivos(entidades_presentes) # Comprobamos si quedan vivos tras el turno del jugador
         if not vivos_actual: # Si no quedan, el jugador ha ganado
-            victoria_msg(_narrar(
-                f"Todas las entidades han caído. El jugador triunfa en este enfrentamiento."
-            ))
+            victoria_msg_inicio()
+            _narrar(
+                f"Todas las entidades han caído. El jugador triunfa en este enfrentamiento.",
+                on_chunk=victoria_msg_chunk
+            )
+            victoria_msg_fin()
             return "victoria"
 
         for e in vivos_actual[:2]: # Máximo 2 enemigos atacan por turno (el resto se posiciona)
@@ -481,11 +522,14 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
             total_enemigo = tirada_enemigo + mod_enemigo
 
             if pifia_enemigo: # Nat 1: fallo automático con complicación narrativa
-                enemigo_msg(info['nombre'], _narrar(
+                enemigo_msg_inicio(info['nombre'])
+                _narrar(
                     f"{info['nombre']} intenta contraatacar con {info.get('arma', 'sus manos')}. "
                     f"NAT 1. ¡PIFIA! Narra una complicación dramática para el enemigo: tropieza, su arma se atasca, "
-                    f"se golpea a sí mismo o queda expuesto brevemente."
-                ))
+                    f"se golpea a sí mismo o queda expuesto brevemente.",
+                    on_chunk=enemigo_msg_chunk
+                )
+                enemigo_msg_fin()
             elif critico_enemigo or total_enemigo >= jugador["ac"]: # Crítico o supera la AC
                 dado = info.get("dado_daño", "1d4")
                 if critico_enemigo: # Daño máximo del dado + modificador
@@ -498,22 +542,31 @@ def combate(entidades_presentes: list) -> str: # Bucle de combate para la termin
                 daño_enemigo = max(1, daño_enemigo) # Mínimo 1 de daño
                 jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo) # Restamos vida al jugador, mínimo 0
                 _guardar_jugador(jugador) # Guardamos la ficha actualizada
-                enemigo_msg(info['nombre'], _narrar( # Narramos el golpe de la entidad
+                enemigo_msg_inicio(info['nombre']) # Narramos el golpe de la entidad (streaming)
+                _narrar(
                     f"{info['nombre']} contraataca al jugador con {info.get('arma', 'sus manos')}. "
                     f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
                     f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. "
-                    f"Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
-                ))
+                    f"Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}",
+                    on_chunk=enemigo_msg_chunk
+                )
+                enemigo_msg_fin()
             else: # Si no llega a la AC, el ataque de la entidad falla
-                enemigo_msg(info['nombre'], _narrar(
+                enemigo_msg_inicio(info['nombre'])
+                _narrar(
                     f"{info['nombre']} intenta contraatacar al jugador. "
-                    f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
-                ))
+                    f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA.",
+                    on_chunk=enemigo_msg_chunk
+                )
+                enemigo_msg_fin()
 
         if jugador["vida_actual"] <= 0: # Si la vida del jugador llega a 0, derrota
-            derrota_msg(_narrar(
-                f"{jugador['nombre']} cae con {jugador['vida_actual']} HP. Narra su caída."
-            ))
+            derrota_msg_inicio()
+            _narrar(
+                f"{jugador['nombre']} cae con {jugador['vida_actual']} HP. Narra su caída.",
+                on_chunk=derrota_msg_chunk
+            )
+            derrota_msg_fin()
             return "derrota"
 
         _mostrar_estado(jugador, entidades_presentes) # Mostramos el estado al inicio del siguiente turno
