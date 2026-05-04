@@ -78,8 +78,8 @@ async function eliminarObjetoInventario(nombre) {
 
 // FUNCIONES PARTIDA
 
-async function obtenerEstadoPartida(beat_actual, resumen, campaña_completada) {
-    return _fetch(url + '/partida/estado/', 'GET', {beat_actual : beat_actual, resumen : resumen, campaña_completada : campaña_completada}); // Le pasamos la url, el método y el par clave-valor del beat actual, el resumen de la partida y si la campaña ha sido completada o no
+async function obtenerEstadoPartida() {
+    return _fetch(url + '/partida/estado/', 'GET'); // LOS GET NO LLEVAN VALOR!!!!!
 }
 
 async function obtenerResumenPartida() {
@@ -93,4 +93,4 @@ async function accionPartida(accion) {
 async function iniciarPartida() {
     return _fetch(url + '/partida/iniciar/', 'POST');
 }
-export {obtenerPersonaje, crearPersonaje, obtenerCampaña, crearCampaña, borrarCampaña, iniciarCombate, obtenerEstadoCombate, accionCombate, obtenerInventario, usarItemInventario, añadirObjetoInventario, eliminarObjetoInventario};
+export {obtenerPersonaje, crearPersonaje, obtenerCampaña, crearCampaña, borrarCampaña, iniciarCombate, obtenerEstadoCombate, accionCombate, obtenerInventario, usarItemInventario, añadirObjetoInventario, eliminarObjetoInventario, obtenerEstadoPartida, obtenerResumenPartida, accionPartida, iniciarPartida};
