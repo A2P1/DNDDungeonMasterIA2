@@ -101,7 +101,7 @@ def crear_personaje(descripcion: str, campaña: dict = None) -> dict: # Genera l
             break
         except ValidationError as e: # Pydantic rechazó la respuesta (ej: atributo > 5, vida fuera de rango): reintentamos
             ultimo_error = e
-            print(f"⚠️  Intento {intento}/{MAX_REINTENTOS} falló validación Pydantic ({e.error_count()} errores). Reintentando...")
+            print(f"Intento {intento}/{MAX_REINTENTOS} falló validación Pydantic ({e.error_count()} errores). Reintentando...")
     else:
         raise RuntimeError(
             "El LLM no consiguió generar una ficha que cumpliera el esquema tras varios intentos. "
@@ -114,7 +114,7 @@ def crear_personaje(descripcion: str, campaña: dict = None) -> dict: # Genera l
     if campaña and campaña.get("armas"): # Validación semántica post-hoc: aviso si el LLM eligió armas fuera del catálogo
         faltantes = _armas_fuera_de_catalogo(stats, campaña["armas"])
         if faltantes:
-            print(f"⚠️  Armas del personaje fuera del catálogo de la campaña: {faltantes}. Se aceptan igualmente pero pueden ser inconsistentes.")
+            print(f"Armas del personaje fuera del catálogo de la campaña: {faltantes}. Se aceptan igualmente pero pueden ser inconsistentes.")
 
     STATS_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe
     with open(STATS_PATH, 'w', encoding='utf-8') as f: # Guardamos la ficha en stats.json
