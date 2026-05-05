@@ -11,7 +11,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_estado_combate
 from tools.dados import tirar_d20, tirar_dado
 from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
-from config import STATS_PATH, COMBATE_PROMPT_PATH, MODEL_NAME
+from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME
 from ui import (combate_msg, enemigo_msg, estado_combate, victoria_msg, derrota_msg, prompt_jugador, sistema_msg, # Helpers batch (siguen vivos para procesar_turno y mensajes estáticos sin _narrar)
                 combate_msg_inicio, combate_msg_chunk, combate_msg_fin, # Streaming para narración de combate del jugador
                 enemigo_msg_inicio, enemigo_msg_chunk, enemigo_msg_fin, # Streaming para ataques de enemigos
@@ -47,6 +47,20 @@ class EvaluacionAccion(BaseModel):
 
 llm = ChatOpenAI(model=MODEL_NAME, temperature=0.9) # LLM para narrar, temperatura alta para respuestas más creativas
 llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3).with_structured_output(EvaluacionAccion) # Structured output fuerza al LLM a rellenar el esquema exacto
+
+
+def _get_tipo_entidad(entidad_id: str) -> str: # Busca si el id pertenece a enemigos o NPCs en entidades.json y devuelve "enemigo" o "npc"
+    if not ENTIDADES_PATH.exists():
+        return "enemigo"
+    with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+        entidades = json.load(f)
+    for e in entidades.get("enemigos", []):
+        if e["id"] == entidad_id:
+            return "enemigo"
+    for n in entidades.get("npcs", []):
+        if n["id"] == entidad_id:
+            return "npc"
+    return "enemigo" # Si no no se encuentra, asumimos enemigo
 
 
 def _modificador(valor: int) -> int: # El atributo (0-5) se usa directamente como modificador (Cosmere RPG)
@@ -114,7 +128,7 @@ def _mostrar_estado(jugador: dict, entidades: list): # Imprime en la terminal la
     estado_combate(jugador['vida_actual'], jugador['vida_max'], enemigos_str) # Lo mostramos con colores en la terminal
 
 
-# ── API ──────────────────────────────────────────────────────────────────────
+
 
 def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado) -> dict: # Construye el dict que devuelve la API al frontend con el estado del turno
     return {
@@ -220,9 +234,13 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
                 objetivo_id = evaluacion.get("objetivo") # ID de la entidad a la que ataca
                 if not objetivo_id and enemigos_vivos: # Si no hay objetivo concreto, atacamos solo al primer enemigo vivo (no cleave AoE)
                     objetivo_id = enemigos_vivos[0]["id"]
-                if objetivo_id:
-                    resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
-                    msg_daño = resultado_daño["mensaje"]
+                if objetivo_id: # Buscamos el tipo del objetivo para usar la tool correcta
+                    tipo_entidad = _get_tipo_entidad(objetivo_id) # Vemos si es npc o enemigo
+                    if tipo_entidad == "npc": # Los NPCs y enemigos están en secciones distintas del JSON
+                        resultado = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
+                    else:
+                        resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
+                    msg_daño = resultado["mensaje"]
                 else:
                     msg_daño = "No hay objetivo al que aplicar el daño."
 
@@ -300,7 +318,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict: # Procesa un turno comple
     return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None) # Devolvemos el estado sin resultado porque el combate continúa
 
 
-# ── CLI ──────────────────────────────────────────────────────────────────────
+
 
 def combate(entidades_presentes: list) -> str: # Bucle de combate para la terminal, recibe las entidades presentes y devuelve "victoria" o "derrota"
     jugador = _cargar_jugador()

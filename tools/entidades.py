@@ -68,8 +68,16 @@ def get_estado_combate(beat_id: str) -> str:
         if e["beat_origen"] == beat_id
     ]
 
+    beat_sin_enemigos = {
+        "beat_id": beat_id,
+        "total": 0,
+        "vivos": 0,
+        "muertos": 0,
+        "combate_terminado": True,
+        "enemigos_vivos": []
+    }
     if not enemigos_beat: # Si no hay ninguno registrado para ese beat, avisamos
-        return f"No hay enemigos registrados en el beat '{beat_id}'"
+        return json.dumps(beat_sin_enemigos, ensure_ascii=False) # Devolvemos el resumen vacío como JSON
 
     vivos = [e for e in enemigos_beat if e["estado"] == "vivo"] # Separamos vivos y muertos
     muertos = [e for e in enemigos_beat if e["estado"] == "muerto"]

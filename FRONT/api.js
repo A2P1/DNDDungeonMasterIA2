@@ -1,6 +1,6 @@
 //Declaro la función _fetch que se encargará de realizar las solicitudes HTTP
 
-url = 'http://localhost:8000/api/'; // URL base de la API
+const url = 'http://localhost:8000'; // URL base de la API (sin barra final)
 async function _fetch(url, HTTPmethod, body) {
     const options = {
         method: HTTPmethod, // Tipo de petición HTTP (GET, POST, PUT, DELETE)

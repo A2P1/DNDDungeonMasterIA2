@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DUNGEON & DRAGONS: UN DUNGEON MASTER DE INTELIGENCIA ARTIFICIAL</title>
+</head>
+<body>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        #narration {
+            width: 50%;
+            height: 500px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            font-size: 16px;
+            line-height: 1.5;
+
+        }
+        #prompt-input {
+            width: 50%;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 16px;
+            
+        }
+        .contenedor {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+    <div class="contenedor">
+        <textarea id="narration" rows="10" cols="50"></textarea><br>
+        <input type="text" id="prompt-input" placeholder="Escribe tu acción...">
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
