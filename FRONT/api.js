@@ -22,75 +22,25 @@ async function _fetch(url, HTTPmethod, body) {
         return response.json();
 }
 
-// FUNCIONES DE PERSONAJE
-async function obtenerPersonaje() { // Función para obtener al personaje
-    return _fetch(url + '/personaje/', 'GET'); // Le pasamos la URL completa y el método de obtener
-}
 
-async function crearPersonaje(descripcion) { // Función para crear el personaje
-    return _fetch(url + '/personaje/', 'POST', {descripcion : descripcion}); // Le pasamos la url, el método y el par clave-valor de la descripción del personaje
-}
-
-// FUNCIONES DE CAMPAÑA
-async function obtenerCampaña() { // Función para obtener la campaña
+async function get_campaña() {
     return _fetch(url + '/campaña/', 'GET'); // Le pasamos la URL completa y el método de obtener
 }
 
-async function crearCampaña(tema, personaje) {
-    return _fetch(url + '/campaña/', 'POST', {tema : tema, personaje : personaje}); // Le pasamos la url, el método y el par clave-valor del tema y el personaje de la campaña
-}
-
-async function borrarCampaña(){
-    return _fetch(url + '/campaña/', 'DELETE'); // Borramos la campaña
-}
-
-// FUNCIONES DE COMBATE
-
-async function iniciarCombate() {
-    return _fetch(url + '/combate/iniciar/', 'POST'); 
-}
-
-async function obtenerEstadoCombate(beat_id) {
-    return _fetch(url + '/combate/estado/' + '?' + 'beat_id=' + beat_id, 'GET'); // Le pasamos la URL completa y el método de obtener
-}
-
-async function accionCombate(beat_id, accion) {
-    return _fetch(url + '/combate/accion/', 'POST', {beat_id : beat_id, accion : accion}); // Le pasamos la url, el método y el par clave-valor del beat_id y la acción a realizar en el combate
-}
-
-// FUNCIONES DE INVENTARIO
-
-async function obtenerInventario() {
-    return _fetch(url + '/inventario/', 'GET'); // Le pasamos la URL completa y el método de obtener
-}
-
-async function usarItemInventario(nombre) {
-    return _fetch(url + '/inventario/usar/', 'POST', {nombre : nombre});
-}
-
-async function añadirObjetoInventario(nombre, tipo, dado_daño, descripcion) {
-    return _fetch(url + '/inventario/objeto/', 'POST', {nombre : nombre, tipo : tipo, dado_daño : dado_daño, descripcion : descripcion}); // Le pasamos la url, el método y el par clave-valor del nombre, tipo, dado de daño y descripción del objeto a añadir al inventario
-}
-
-async function eliminarObjetoInventario(nombre) {
-    return _fetch(url + '/inventario/objeto/' + encodeURIComponent(nombre), 'DELETE'); // Le pasamos la url, el método y el par clave-valor del nombre del objeto a eliminar del inventario
-}
-
-// FUNCIONES PARTIDA
-
-async function obtenerEstadoPartida() {
-    return _fetch(url + '/partida/estado/', 'GET'); // LOS GET NO LLEVAN VALOR!!!!!
-}
-
-async function obtenerResumenPartida() {
-    return _fetch(url + '/partida/resumen/', 'GET'); // Le pasamos la URL completa y el método de obtener
+async function iniciarPartida(tema, personaje) {
+    return _fetch(url + '/campaña/iniciar/', 'POST', {tema: tema, personaje: personaje}); // Le pasamos la URL completa y el método de obtener
 }
 
 async function accionPartida(accion) {
     return _fetch(url + '/partida/accion/', 'POST', {accion : accion}); // Le pasamos la url, el método y el par clave-valor de la acción a realizar en la partida
 }
 
-async function iniciarPartida() {
-    return _fetch(url + '/partida/iniciar/', 'POST');
+async function borrarPartida() {
+    return _fetch(url + '/campaña/', 'DELETE'); // Borramos la campaña
 }
-export {obtenerPersonaje, crearPersonaje, obtenerCampaña, crearCampaña, borrarCampaña, iniciarCombate, obtenerEstadoCombate, accionCombate, obtenerInventario, usarItemInventario, añadirObjetoInventario, eliminarObjetoInventario, obtenerEstadoPartida, obtenerResumenPartida, accionPartida, iniciarPartida};
+
+async function accionCombate(beat_id, accion) {
+    return _fetch(url + '/combate/conflicto/', 'POST', {beat_id : beat_id, accion : accion}); // Le pasamos la url, el método y el par clave-valor del beat_id y la acción a realizar en el combate
+}
+
+export { get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate }; // Exportamos las funciones para usarlas en el frontend

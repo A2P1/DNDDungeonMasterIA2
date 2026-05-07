@@ -53,7 +53,7 @@ def cargar_stats() -> dict: # Cargamos los datos del jugador
         return json.load(f)
 
 def borrar_campaña():
-    for path in [CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH]:
+    for path in [CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, RESUMEN_PATH]:
         if path.exists():
             path.unlink()
 
@@ -200,7 +200,8 @@ def narrar_inicio_partida():
 def procesar_accion(accion: str):
     resumen = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
     if resumen:
-        if _detectar_intento_ataque(accion, resumen):
+        quiere_atacar, hay_objetivo = _detectar_intento_ataque(accion, resumen)
+        if quiere_atacar and hay_objetivo:
             entidades = _get_entidades_presentes()
             if not entidades and _hay_entidad_atacable(accion, resumen):
                 entidades = _generar_enemigo_narrativo(accion, resumen)

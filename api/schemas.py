@@ -28,7 +28,7 @@ class IniciarRequest(BaseModel): # Body del POST /partida/iniciar con el tema y 
 class IniciarResponse(BaseModel): # Respuesta del POST /partida/iniciar con toda la info para arrancar la partida
     campaña: dict           # Datos de la campaña recién creada
     stats: dict            # Stats iniciales del personaje (atributos, vida, arma equipada, etc)
-    narracion_inicio: str   # Narración de introducción a la campaña generada por el narrador
+    narracion_inicio: dict   # Narración de introducción a la campaña generada por el narrador
 
 class AccionRequest(BaseModel): # Body del POST /partida/accion con lo que escribe el jugador
     accion: str  # Lo que escribe el jugador (ej: "Entro a la taberna")
