@@ -1,4 +1,4 @@
-import {obtenerPersonaje, crearPersonaje, obtenerCampaña, crearCampaña, borrarCampaña, iniciarCombate, obtenerEstadoCombate, accionCombate, obtenerInventario, usarItemInventario, añadirObjetoInventario, eliminarObjetoInventario, obtenerEstadoPartida, obtenerResumenPartida, accionPartida, iniciarPartida} from './api.js' ; // Importamos las funciones de la API para usarlas en el frontend
+import {get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate } from './api.js' ; // Importamos las funciones de la API para usarlas en el frontend
 
 let nombre = "";
 let tema = "";
@@ -6,28 +6,34 @@ let tema = "";
 let modo = "setupPersonaje";
 async function init() {
     try {
-            const personaje = await obtenerPersonaje(); // Obtenemos el personaje al cargar la página
-            const campaña = await obtenerCampaña(); // Obtenemos la campaña al cargar la página
-            //if (personaje && campaña)
-                //llamar narracion
+            const campaña = await get_campaña(); // Obtenemos la campaña al cargar la página
+            if (campaña) {
+                modo = "narrativa";
+            }
     } catch (error) {
         Personaje();
     }
     
-    document.getElementById("prompt-input").addEventListener('keydown', function(event) {
+    document.getElementById("prompt-input").addEventListener('keydown', async function(event) {
         if (event.key === 'Enter') {
             let valor = document.getElementById("prompt-input").value;
             limpiarInput();
+            if (modo === "narrativa") {
+                let resultado = await accionPartida(valor);
+                escribirTexto("\n\n" + resultado.texto); // Escribimos la narración que nos devuelve el backend en el textarea
+            }
             if (modo === "setupPersonaje") {
                 nombre = valor;
-                crearPersonaje(nombre);
                 modo = "setupCampaña";
                 Campaña();
             }
             if (modo === "setupCampaña") {
                 tema = valor;
-                crearCampaña(tema, nombre);
+                let inicio = await iniciarPartida(tema, nombre);
+                escribirTexto("\n\n" + inicio.narracion_inicio); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
+                modo = "narrativa";
             } 
+            
 
         }
     });
