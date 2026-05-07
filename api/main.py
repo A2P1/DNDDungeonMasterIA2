@@ -1,5 +1,5 @@
 from fastapi import FastAPI # El framework que usamos para montar la API REST
-from api.routers import campaña, personaje, partida, combate, inventario # Los routers de cada sección
+from api.routers import router_principal # Los routers de cada sección
 from fastapi.middleware.cors import CORSMiddleware # Permite conectar con el front
 app = FastAPI( # Creamos la aplicación FastAPI con su metadata
     title="DnD Dungeon Master IA",
@@ -15,12 +15,9 @@ app.add_middleware( # Configuramos CORS para permitir peticiones desde el fronte
 
 
 # Registramos cada router con su grupo de endpoints
-app.include_router(campaña.router)    # /campaña  → crear, cargar y borrar la campaña
-app.include_router(personaje.router)  # /personaje → crear y consultar la ficha del jugador
-app.include_router(partida.router)    # /partida  → enviar acciones al narrador y consultar el estado
-app.include_router(combate.router)    # /combate  → procesar turnos de combate y consultar el estado
-app.include_router(inventario.router) # /inventario → gestionar el inventario del jugador
-
+app.include_router(router_principal.routerCampaña) # Crear y consultar la campaña
+app.include_router(router_principal.routerAccion)  # Procesar la accion  
+app.include_router(router_principal.routerCombate) # Procesar el combate
 
 @app.get("/")
 def root(): # Endpoint de salud para comprobar que la API está activa

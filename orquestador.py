@@ -31,13 +31,26 @@ def iniciar (tema, personaje):
         campaña = cargar_campaña()
         if not personaje_existe():
             stats = crear_personaje(personaje)
+        else:
+            stats = cargar_stats()
     else:
         stats = crear_personaje(personaje)
         campaña = generar_campaña(tema, personaje)
         if not entidades_existen(): 
             enriquecer_entidades(campaña) 
+    
+    return {"campaña": campaña, "stats": stats, "narracion_inicio": narrar_inicio_partida()}
 
-    return campaña, stats
+def comprobarCampaña() -> bool: # Comprobamos si existe la campaña
+    if campaña_existe():
+        return True
+    return False
+
+
+
+def cargar_stats() -> dict: # Cargamos los datos del jugador
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 def borrar_campaña():
     for path in [CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH]:
@@ -177,27 +190,7 @@ def _hay_entidad_atacable(user_input: str, resumen: str) -> bool: # Comprueba si
     except Exception:
         return False 
 
-def _recoger_loot(entidades: list) -> list: 
-    items_recogidos = [] 
-    for e in entidades: 
-        info_raw = get_info_entidad.invoke({"entidad_id": e["id"]}) 
-        try:
-            info = json.loads(info_raw) 
-        except (json.JSONDecodeError, TypeError):
-            continue 
 
-        if info.get("estado") != "muerto": 
-            continue
-
-        for item in info.get("loot", []): 
-            add_item_to_inventory.invoke({"item_json": json.dumps(item, ensure_ascii=False)}) 
-            items_recogidos.append(item)
-
-    if items_recogidos:
-        nombres = ", ".join(i["nombre"] for i in items_recogidos) 
-        sistema_msg(f"Loot recogido: {nombres}") 
-
-    return items_recogidos 
 
 def narrar_inicio_partida():
     campaña = cargar_campaña()
@@ -212,30 +205,7 @@ def procesar_accion(accion: str):
             if not entidades and _hay_entidad_atacable(accion, resumen):
                 entidades = _generar_enemigo_narrativo(accion, resumen)
             if entidades:
-                resultado = combate(entidades) 
-                nombres_derrotados = ", ".join(e['nombre'] for e in entidades) 
-                if resultado == "victoria": 
-                        cierre = "venció, eliminándoles."
-                elif resultado == "resolucion":
-                        cierre = "resolvió el combate sin matarles (huida, negociación o similar)."
-                else:
-                        cierre = "fue derrotado."
-                resumen_combate = f"El jugador inició un combate inesperado contra {nombres_derrotados} y {cierre}"
-                RESUMEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-                with open(RESUMEN_PATH, 'a', encoding='utf-8') as f: 
-                        f.write(resumen_combate + "\n")
-
-                if resultado == "derrota": 
-                    borrar_campaña() # Por ahora lo dejo así
-                    return {"tipo": "derrota", "texto": "El jugador ha sido derrotado."}
-                loot = _recoger_loot(entidades)
-                loot_fragment = f" Ha recogido: {', '.join(i['nombre'] for i in loot)}." if loot else ""
-                narracion_final_combate = narrador(
-                        f"[SISTEMA] El jugador acaba de derrotar en combate a: {nombres_derrotados}. "
-                        f"Esas criaturas/personajes han muerto y ya no están presentes.{loot_fragment} "
-                        f"Narra las consecuencias de la victoria y continúa la historia."
-                )
-                return {"tipo": resultado, "texto": narracion_final_combate}
+                return {"tipo": "combate_iniciado", "entidades": entidades, "texto": combate(entidades)} # Como el tema del combate se gestiona a través de la api, aquí solo devolvemos que el combate ha iniciado
         narracion = narrador(accion)
         return {"tipo": "narracion", "texto": narracion}
     

@@ -346,3 +346,417 @@ def main(): # Bucle principal del juego
 
 
 main() # Arrancamos el juego
+
+
+
+
+=============================================================================================================================================================================================
+ROUTERS
+=============================================================================================================================================================================================
+
+CAMPAÑA
+
+
+
+from fastapi import APIRouter, HTTPException # APIRouter para agrupar endpoints, HTTPException para errores HTTP
+from api.schemas import CrearCampañaRequest, CampañaResponse # Schemas de validación de entrada y salida
+from agentes.director import generar_campaña as _generar_campaña, campaña_existe, cargar_campaña # Funciones del agente director
+from agentes.enriquecedor import enriquecer_entidades # Para generar las fichas de enemigos tras crear la campaña
+from config import CAMPAIGN_PATH, STATS_PATH, RESUMEN_PATH, ENTIDADES_PATH # Rutas de los archivos a limpiar al borrar
+
+router = APIRouter( # Router de campaña, todos sus endpoints empiezan por /campaña
+    prefix="/campaña",
+    tags=["Campaña"] # Agrupa los endpoints en la documentación de Swagger
+)
+
+# Carga la campaña
+@router.get("/", response_model=CampañaResponse)
+def get_campaña(): # Devuelve la campaña activa, o 404 si no hay ninguna
+    if not campaña_existe():
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña creada")
+    return cargar_campaña() # Leemos el campaign.json y lo devolvemos
+
+
+@router.post("/", response_model=CampañaResponse, status_code=201)
+def crear_campaña(body: CrearCampañaRequest): # Genera una nueva campaña con el tema y el personaje que pasa el frontend
+    campaña = _generar_campaña(body.tema, body.personaje) # El director genera la campaña
+    enriquecer_entidades(campaña) # El enriquecedor genera las fichas de enemigos y NPCs automáticamente
+    return campaña # Devolvemos la campaña recién creada
+
+
+@router.delete("/", status_code=204)
+def borrar_campaña(): # Borra la campaña y limpia todos los archivos de la partida para empezar de cero
+    if not campaña_existe():
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña que borrar")
+    for archivo in [CAMPAIGN_PATH, STATS_PATH, RESUMEN_PATH, ENTIDADES_PATH]: # Borramos todos los archivos de estado
+        if archivo.exists(): # Solo intentamos borrar si el archivo existe
+            archivo.unlink() # Lo eliminamos del disco
+
+
+
+COMBATE 
+
+import json # Para parsear respuestas de las tools y leer entidades.json
+from fastapi import APIRouter, HTTPException, Query # APIRouter para agrupar endpoints, Query para parámetros de URL
+from api.schemas import AccionCombateRequest, EstadoCombateResponse, IniciarCombateResponse # Schemas de validación
+from agentes.combate import procesar_turno # Procesa un turno completo (jugador + enemigos) y devuelve el estado
+from agentes.Narrador import narrador # Para generar la narración de introducción del combate
+from tools.entidades import get_estado_combate as _get_estado_combate # Para consultar el estado del combate sin hacer un turno
+from tools.campana import marcar_beat_completado, get_siguiente_beat # Para marcar el beat como superado y obtener el beat activo
+from tools.inventario import add_item_to_inventory # Para añadir el loot al inventario del jugador
+from agentes.director import campaña_existe # Para comprobar si hay campaña activa antes de iniciar el combate
+from services.routing import get_entidades_presentes # Para obtener las entidades vivas del beat activo
+from config import STATS_PATH, ENTIDADES_PATH # Rutas a la ficha del jugador y al archivo de entidades
+
+router = APIRouter( # Router de combate, todos sus endpoints empiezan por /combate
+    prefix="/combate",
+    tags=["Combate"]
+)
+
+# Tipos de beat que implican combate — usados para validar que el beat activo es de combate
+_TIPOS_COMBATE = ("combate", "jefe", "climax")
+
+
+def _cargar_jugador() -> dict: # Lee la ficha del jugador del disco, o lanza 404 si no existe
+    if not STATS_PATH.exists():
+        raise HTTPException(status_code=404, detail="No hay ningún personaje creado")
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _recoger_loot(beat_id: str) -> list: # Busca los enemigos muertos del beat, recoge su loot y lo añade al inventario
+    if not ENTIDADES_PATH.exists(): # Si no hay archivo de entidades no hay loot que recoger
+        return []
+
+    with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f: # Leemos todas las entidades
+        entidades = json.load(f)
+
+    items_recogidos = [] # Aquí acumulamos los items que vayamos recogiendo
+
+    enemigos_del_beat = [ # Filtramos los enemigos muertos del beat (o "temp" para combate narrativo)
+        e for e in entidades.get("enemigos", [])
+        if e.get("beat_origen") == beat_id and e.get("estado") == "muerto"
+    ]
+
+    for enemigo in enemigos_del_beat: # Recorremos cada enemigo muerto del beat
+        for item in enemigo.get("loot", []): # Recorremos su lista de loot (puede estar vacía)
+            add_item_to_inventory.invoke({"item_json": json.dumps(item, ensure_ascii=False)}) # Añadimos el item al inventario
+            items_recogidos.append(item) # Lo añadimos a la lista de respuesta
+
+    return items_recogidos # Devolvemos todos los items recogidos
+
+
+@router.post("/iniciar", response_model=IniciarCombateResponse)
+def iniciar_combate(): # Inicializa el combate del beat activo: valida que es de combate, obtiene entidades y genera la intro
+    if not campaña_existe(): # Sin campaña no hay beat de combate
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña activa")
+
+    raw = get_siguiente_beat.invoke({}) # Consultamos cuál es el siguiente beat pendiente
+    if raw == "CAMPAÑA COMPLETADA": # Si la campaña terminó, no hay combate que iniciar
+        raise HTTPException(status_code=409, detail="La campaña ya está completada")
+
+    data = json.loads(raw) # Parseamos la respuesta del beat
+    beat = data.get("beat", {}) # Extraemos el objeto beat
+    beat_id = beat.get("id", "") # Guardamos el id del beat
+    beat_tipo = beat.get("tipo", "") # Tipo del beat: "combate", "dialogo", "exploracion", etc.
+
+    if beat_tipo not in _TIPOS_COMBATE: # Si el beat activo no es de combate, no tiene sentido inicializarlo así
+        raise HTTPException(
+            status_code=409,
+            detail=f"El beat activo ('{beat_id}') es de tipo '{beat_tipo}', no es un beat de combate"
+        )
+
+    entidades = get_entidades_presentes() # Obtenemos las entidades vivas registradas en este beat
+    if not entidades: # Si no hay entidades, el beat de combate ya está limpio (puede que fuera resuelto antes)
+        raise HTTPException(
+            status_code=409,
+            detail=f"No hay enemigos vivos en el beat '{beat_id}'. El combate puede que ya esté resuelto."
+        )
+
+    descripcion = beat.get("descripcion", "") # Descripción del beat para dar contexto al frontend
+    narracion = narrador( # El narrador genera la introducción del combate con el contexto del beat
+        f"[SISTEMA] El jugador llega al momento: {descripcion}. "
+        f"Narra la aparición de los enemigos y la tensión del momento. No resuelvas ningún ataque todavía."
+    )
+
+    return { # Devolvemos todo lo que el frontend necesita para arrancar la pantalla de combate
+        "beat_id": beat_id, # El frontend lo usará en cada POST /combate/accion
+        "descripcion": descripcion, # Para mostrar contexto al jugador
+        "entidades": entidades, # Las entidades contra las que va a pelear (con sus stats)
+        "narracion": narracion # El texto de introducción para mostrar antes de empezar los turnos
+    }
+
+
+@router.get("/estado", response_model=EstadoCombateResponse)
+def get_estado_combate(beat_id: str = Query(..., description="ID del beat activo, ej: 'b2'")): # Devuelve la vida del jugador, las entidades vivas y si el combate ha terminado
+    jugador = _cargar_jugador() # Cargamos la ficha del jugador para saber su vida actual
+    estado = json.loads(_get_estado_combate.invoke({"beat_id": beat_id})) # Consultamos el estado del combate en el beat
+    return {
+        "jugador_vida": jugador["vida_actual"],
+        "jugador_vida_max": jugador["vida_max"],
+        "entidades_vivas": estado.get("enemigos_vivos", []), # Lista de enemigos que siguen en pie
+        "combate_terminado": estado.get("combate_terminado", False),
+        "resultado": None, # Sin resultado todavía, el combate sigue
+        "narracion": None, # Sin narración en el GET, solo en el POST /accion
+        "loot": None # Sin loot en el GET, solo se devuelve al terminar el combate
+    }
+
+
+@router.post("/accion", response_model=EstadoCombateResponse)
+def enviar_accion_combate(body: AccionCombateRequest): # Procesa el turno del jugador y el contraataque de los enemigos
+    if not STATS_PATH.exists():
+        raise HTTPException(status_code=404, detail="No hay ningún personaje creado")
+
+    turno = procesar_turno(body.beat_id, body.accion) # El agente de combate resuelve el turno completo
+
+    resultado = turno.get("resultado") # "victoria", "derrota", "resolucion" o None si el combate sigue
+    loot = None # Por defecto no hay loot; solo se rellena al terminar el combate
+
+    if resultado in ("victoria", "resolucion"): # Si el combate terminó, completamos el beat y recogemos el loot
+        if body.beat_id != "temp": # Los beats temporales (combate narrativo) no existen en campaign.json
+            marcar_beat_completado.invoke({"beat_id": body.beat_id}) # Avanzamos la campaña al siguiente beat
+        loot = _recoger_loot(body.beat_id) # Recogemos el loot de todos los enemigos muertos del beat
+
+    turno["loot"] = loot # Añadimos el loot a la respuesta para que el frontend lo pueda mostrar
+    return turno
+
+
+
+INVENTARIO 
+
+
+
+import json # Para leer y escribir el stats.json
+from fastapi import APIRouter, HTTPException # APIRouter para agrupar endpoints, HTTPException para errores HTTP
+from api.schemas import ObjetoInventarioRequest, InventarioResponse, UsarItemRequest, UsarItemResponse # Schemas de validación
+from tools.inventario import usar_item as _usar_item # La tool que consume el item y aplica su efecto
+from config import STATS_PATH # Ruta a la ficha del jugador donde está el inventario
+
+router = APIRouter( # Router de inventario, todos sus endpoints empiezan por /inventario
+    prefix="/inventario",
+    tags=["Inventario"]
+)
+
+
+def _cargar_stats() -> dict: # Lee la ficha del jugador del disco, o lanza 404 si no existe
+    if not STATS_PATH.exists():
+        raise HTTPException(status_code=404, detail="No hay ningún personaje creado")
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _guardar_stats(stats: dict): # Guarda la ficha del jugador actualizada en el disco
+    with open(STATS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, indent=2, ensure_ascii=False)
+
+
+@router.get("/", response_model=InventarioResponse)
+def get_inventario(): # Devuelve el inventario completo del jugador
+    stats = _cargar_stats()
+    return {"inventario": stats.get("inventario", [])} # Si no tiene inventario, devolvemos lista vacía
+
+
+@router.post("/usar", response_model=UsarItemResponse)
+def usar_item(body: UsarItemRequest): # Usa un item consumible del inventario: lo elimina y aplica su efecto
+    stats = _cargar_stats()
+
+    # Comprobamos que el item existe y es consumible antes de llamar a la tool
+    inventario = stats.get("inventario", [])
+    item_existe = any(
+        i["nombre"].lower() == body.nombre.lower() and i.get("tipo") == "consumible"
+        for i in inventario
+    )
+    if not item_existe: # Si no existe o no es consumible, devolvemos 404 con un mensaje claro
+        raise HTTPException(
+            status_code=404,
+            detail=f"'{body.nombre}' no está en el inventario o no es un item consumible"
+        )
+
+    mensaje = _usar_item.invoke({"nombre_item": body.nombre}) # La tool consume el item, aplica el efecto y actualiza stats.json
+
+    stats_actualizados = _cargar_stats() # Recargamos la ficha para tener el inventario y el HP ya actualizados por la tool
+    return {
+        "mensaje": mensaje, # Texto del efecto que el frontend puede mostrar al jugador
+        "inventario": stats_actualizados.get("inventario", []), # Inventario sin el item consumido
+        "vida_actual": stats_actualizados.get("vida_actual") # HP actualizado (útil si el item curó)
+    }
+
+
+@router.post("/objeto", response_model=InventarioResponse, status_code=201)
+def añadir_objeto(body: ObjetoInventarioRequest): # Añade un objeto al inventario, si ya existe devuelve 409
+    stats = _cargar_stats()
+    inventario = stats.get("inventario", [])
+
+    if any(obj["nombre"].lower() == body.nombre.lower() for obj in inventario): # Comprobamos si ya existe un objeto con ese nombre
+        raise HTTPException(status_code=409, detail=f"El objeto '{body.nombre}' ya existe en el inventario")
+
+    nuevo_objeto = body.model_dump(exclude_none=True) # Convertimos el body a dict descartando los campos None
+    inventario.append(nuevo_objeto) # Añadimos el objeto al inventario
+    stats["inventario"] = inventario
+    _guardar_stats(stats) # Guardamos la ficha actualizada
+    return {"inventario": inventario}
+
+
+@router.delete("/objeto/{nombre}", response_model=InventarioResponse)
+def eliminar_objeto(nombre: str): # Elimina un objeto del inventario por su nombre, o 404 si no existe
+    stats = _cargar_stats()
+    inventario = stats.get("inventario", [])
+
+    inventario_nuevo = [obj for obj in inventario if obj["nombre"].lower() != nombre.lower()] # Filtramos el objeto a eliminar
+    if len(inventario_nuevo) == len(inventario): # Si el tamaño no cambió, el objeto no estaba en el inventario
+        raise HTTPException(status_code=404, detail=f"El objeto '{nombre}' no existe en el inventario")
+
+    stats["inventario"] = inventario_nuevo
+    _guardar_stats(stats) # Guardamos el inventario sin el objeto eliminado
+    return {"inventario": inventario_nuevo}
+
+
+
+PARTIDA 
+
+
+
+from fastapi import APIRouter, HTTPException # APIRouter para agrupar endpoints, HTTPException para errores HTTP
+from api.schemas import AccionJugadorRequest, RespuestaNarradorResponse, EstadoPartidaResponse # Schemas de validación
+from agentes.director import campaña_existe, cargar_campaña # Para comprobar si hay campaña activa
+from agentes.Narrador import narrador, narrador_inicio # Los dos modos del narrador: turno normal e inicio de partida
+from services.routing import ( # Funciones de routing que deciden si la acción va al narrador o desencadena combate
+    detectar_intento_ataque,
+    get_entidades_presentes,
+    hay_entidad_atacable,
+    generar_enemigo_narrativo
+)
+from config import RESUMEN_PATH # Ruta al resumen narrativo acumulado de la partida
+
+router = APIRouter( # Router de partida, todos sus endpoints empiezan por /partida
+    prefix="/partida",
+    tags=["Partida"]
+)
+
+
+def _get_beat_actual(campaña: dict) -> dict | None: # Devuelve el primer beat que no esté completado, o None si la campaña terminó
+    for acto in campaña.get("actos", []):
+        for beat in acto.get("beats", []):
+            if not beat.get("completado", False): # El primer beat no completado es el beat activo
+                return beat
+    return None
+
+
+def _campaña_completada(campaña: dict) -> bool: # Comprueba si todos los beats están completados
+    return all(
+        beat.get("completado", False)
+        for acto in campaña.get("actos", [])
+        for beat in acto.get("beats", [])
+    )
+
+
+@router.get("/estado", response_model=EstadoPartidaResponse)
+def get_estado_partida(): # Devuelve el beat en curso, el resumen y si la campaña ha terminado
+    if not campaña_existe():
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña activa")
+    campaña = cargar_campaña() # Cargamos la campaña del disco
+    resumen = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else "" # Leemos el resumen si existe
+    return {
+        "beat_actual": _get_beat_actual(campaña),
+        "resumen": resumen,
+        "campaña_completada": _campaña_completada(campaña)
+    }
+
+
+@router.get("/resumen")
+def get_resumen(): # Devuelve solo el resumen narrativo acumulado hasta ahora
+    if not RESUMEN_PATH.exists():
+        return {"resumen": ""}
+    return {"resumen": RESUMEN_PATH.read_text(encoding='utf-8').strip()}
+
+
+@router.post("/accion", response_model=RespuestaNarradorResponse)
+def enviar_accion(body: AccionJugadorRequest): # Recibe la acción del jugador, detecta si es un ataque y enruta en consecuencia
+    if not campaña_existe():
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña activa")
+
+    resumen = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else "" # Leemos el resumen para pasárselo al detector
+
+    if resumen and detectar_intento_ataque(body.accion, resumen): # Solo comprobamos ataques si ya hay partida en marcha (hay resumen)
+        entidades = get_entidades_presentes() # Primero buscamos entidades registradas en el beat activo
+
+        if not entidades and hay_entidad_atacable(body.accion, resumen): # Si no hay entidades registradas pero el LLM detecta que hay alguien presente...
+            entidades = generar_enemigo_narrativo(body.accion, resumen) # ...generamos una ficha temporal para ese enemigo narrativo
+
+        if entidades: # Si hay entidades, iniciamos combate en vez de narrar la acción
+            beat_id = entidades[0].get("beat_origen", "temp") # Usamos el beat_origen de la primera entidad (o "temp" si es narrativa)
+            intro = narrador( # El narrador genera la introducción del combate para que la escena tenga continuidad
+                f"[SISTEMA] El jugador intenta atacar: '{body.accion}'. "
+                f"Narra el inicio del enfrentamiento de forma brusca, sin resolver ningún ataque todavía."
+            )
+            return { # Devolvemos tipo "combate_iniciado" para que el frontend sepa que tiene que cambiar de modo
+                "texto": intro,
+                "tipo": "combate_iniciado",
+                "entidades": entidades, # Las entidades contra las que va a combatir
+                "beat_id": beat_id # El beat_id que el frontend debe pasar a POST /combate/accion
+            }
+
+    # Si no hay intento de ataque (o no hay resumen todavía), el narrador procesa la acción normalmente
+    texto = narrador(body.accion)
+    return {"texto": texto, "tipo": "narracion"}
+
+
+@router.post("/iniciar", response_model=RespuestaNarradorResponse)
+def iniciar_partida(): # Inicia la partida desde el principio con la narración de apertura, solo se llama la primera vez
+    if not campaña_existe():
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña creada")
+    campaña = cargar_campaña() # Cargamos la campaña para pasársela al narrador de inicio
+    texto = narrador_inicio(campaña) # El narrador genera la narración de apertura con el contexto de la campaña
+    return {"texto": texto, "tipo": "narracion"}
+
+
+
+
+PERSONAJE 
+
+
+
+import json # Para leer y escribir el stats.json
+from fastapi import APIRouter, HTTPException # APIRouter para agrupar endpoints, HTTPException para errores HTTP
+from api.schemas import CrearPersonajeRequest, PersonajeResponse # Schemas de validación
+from agentes.creador_personaje import crear_personaje as _crear_personaje, personaje_existe # Funciones del agente creador
+from config import STATS_PATH # Ruta al archivo de la ficha del jugador
+
+router = APIRouter( # Router de personaje, todos sus endpoints empiezan por /personaje
+    prefix="/personaje",
+    tags=["Personaje"]
+)
+
+
+def _cargar_stats() -> dict: # Lee la ficha del jugador del disco, o lanza 404 si no existe
+    if not STATS_PATH.exists():
+        raise HTTPException(status_code=404, detail="No hay ningún personaje creado")
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _guardar_stats(stats: dict): # Guarda la ficha del jugador en el disco
+    with open(STATS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, indent=2, ensure_ascii=False)
+
+
+@router.get("/", response_model=PersonajeResponse)
+def get_personaje(): # Devuelve la ficha completa del jugador, o 404 si no existe
+    return _cargar_stats()
+
+
+@router.post("/", response_model=PersonajeResponse, status_code=201)
+def crear_personaje(body: CrearPersonajeRequest): # Genera una ficha nueva a partir de la descripción del jugador
+    stats = _crear_personaje(body.descripcion) # El agente creador genera los stats y los guarda en el disco
+    return stats
+
+
+@router.put("/", response_model=PersonajeResponse)
+def actualizar_personaje(body: PersonajeResponse): # Actualiza los datos del personaje, útil para modificar stats desde el frontend
+    if not personaje_existe():
+        raise HTTPException(status_code=404, detail="No hay ningún personaje creado")
+    stats = _cargar_stats() # Cargamos la ficha actual
+    stats.update(body.model_dump(exclude_none=True)) # Sobreescribimos solo los campos que vienen en el body
+    _guardar_stats(stats) # Guardamos los cambios
+    return stats
+
