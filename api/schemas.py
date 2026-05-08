@@ -37,6 +37,7 @@ class AccionResponse(BaseModel):
     tipo: str
     texto: str
     entidades: Optional[list] = None
+    beat_id: Optional[str] = None  # Solo se devuelve beat_id si el tipo es "combate_iniciado"
 
 
 # SCHEMAS DE COMBATE

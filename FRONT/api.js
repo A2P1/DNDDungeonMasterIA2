@@ -24,15 +24,15 @@ async function _fetch(url, HTTPmethod, body) {
 
 
 async function get_campaña() {
-    return _fetch(url + '/campaña/', 'GET'); // Le pasamos la URL completa y el método de obtener
+    return _fetch(url + '/campaña', 'GET'); // Le pasamos la URL completa y el método de obtener
 }
 
 async function iniciarPartida(tema, personaje) {
-    return _fetch(url + '/campaña/iniciar/', 'POST', {tema: tema, personaje: personaje}); // Le pasamos la URL completa y el método de obtener
+    return _fetch(url + '/campaña/iniciar', 'POST', {tema: tema, personaje: personaje}); // Le pasamos la URL completa y el método de obtener
 }
 
 async function accionPartida(accion) {
-    return _fetch(url + '/partida/accion/', 'POST', {accion : accion}); // Le pasamos la url, el método y el par clave-valor de la acción a realizar en la partida
+    return _fetch(url + '/partida/accion', 'POST', {accion : accion}); // Le pasamos la url, el método y el par clave-valor de la acción a realizar en la partida
 }
 
 async function borrarPartida() {
@@ -40,7 +40,7 @@ async function borrarPartida() {
 }
 
 async function accionCombate(beat_id, accion) {
-    return _fetch(url + '/combate/conflicto/', 'POST', {beat_id : beat_id, accion : accion}); // Le pasamos la url, el método y el par clave-valor del beat_id y la acción a realizar en el combate
+    return _fetch(url + '/combate/conflicto', 'POST', {beat_id : beat_id, accion : accion}); // Le pasamos la url, el método y el par clave-valor del beat_id y la acción a realizar en el combate
 }
 
 export { get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate }; // Exportamos las funciones para usarlas en el frontend

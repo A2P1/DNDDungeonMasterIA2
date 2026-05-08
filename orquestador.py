@@ -206,7 +206,8 @@ def procesar_accion(accion: str):
             if not entidades and _hay_entidad_atacable(accion, resumen):
                 entidades = _generar_enemigo_narrativo(accion, resumen)
             if entidades:
-                return {"tipo": "combate_iniciado", "entidades": entidades, "texto": combate(entidades)} # Como el tema del combate se gestiona a través de la api, aquí solo devolvemos que el combate ha iniciado
+                beat1 = entidades[0].get("beat_origen", "temp")
+                return {"tipo": "combate_iniciado", "entidades": entidades, "texto": combate(entidades), "beat_id": beat1} # Como el tema del combate se gestiona a través de la api, aquí solo devolvemos que el combate ha iniciado
         narracion = narrador(accion)
         return {"tipo": "narracion", "texto": narracion}
     
