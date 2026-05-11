@@ -51,7 +51,7 @@ async function init() {
                 escribirTexto("Vida del jugador: " + conflicto.jugador_vida + " / " + conflicto.jugador_vida_max + "\n");
                 escribirTexto("Enemigos vivos: " + conflicto.entidades_vivas.map(e => e.nombre + ": " + e.vida).join(", ") + "\n");
                 if (conflicto.tirada != null)
-                    escribirTexto("Tirada de dados: " + conflicto.tirada + "/20\n");
+                    escribirTexto("Tirada de dados: " + conflicto.tirada + "/20\n"); // Arreglar esto
                 escribirTexto("\n ---------------- \n");
                 if (conflicto.combate_terminado === true) {
                     modo = "narrativa";
