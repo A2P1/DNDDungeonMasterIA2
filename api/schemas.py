@@ -54,7 +54,7 @@ class EstadoCombateResponse(BaseModel): # Estado del combate tras procesar un tu
     resultado: Optional[str]     # "victoria" | "derrota" | "resolucion" | None si el combate sigue
     narracion: Optional[str] = None  # Texto narrado del turno (solo en POST /accion)
     loot: Optional[list] = None  # Items recogidos de los enemigos muertos (solo cuando resultado == "victoria" o "resolucion")
-
+    tirada: Optional[int] = None  # Resultado de la tirada de dado del jugador en su turno (solo en POST /accion)
 
 # SCHEMAS DE INVENTARIO
 

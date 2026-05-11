@@ -101,26 +101,28 @@ def _get_vivos(entidades: list) -> list:
     return vivos
 
 
-def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado) -> dict:
+def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tirada: int) -> dict:
     return {
         "narracion": narracion,
         "jugador_vida": jugador["vida_actual"],
         "jugador_vida_max": jugador["vida_max"],
         "entidades_vivas": estado.get("enemigos_vivos", []),
         "combate_terminado": estado.get("combate_terminado", False),
-        "resultado": resultado
+        "resultado": resultado,
+        "tirada": tirada
     }
 
 
 def procesar_turno(beat_id: str, accion: str) -> dict:
     jugador = _cargar_jugador()
     narracion = []
+    tiro = None
 
     estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
     enemigos_vivos = estado.get("enemigos_vivos", [])
 
     if not enemigos_vivos:
-        return _respuesta_turno(jugador, estado, "No quedan enemigos.", "victoria")
+        return _respuesta_turno(jugador, estado, "No quedan enemigos.", "victoria", tiro)
 
     armas_inv = get_armas(jugador)
     if armas_inv:
@@ -131,7 +133,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
                 f"El jugador intenta usar '{verificacion['nombre']}' pero no lo tiene. "
                 f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma."
             )
-            return _respuesta_turno(jugador, estado, texto, None)
+            return _respuesta_turno(jugador, estado, texto, None, tiro)
         elif verificacion["estado"] == "encontrada":
             jugador["arma"] = verificacion["arma"]
             _guardar_jugador(jugador)
@@ -150,7 +152,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     if not evaluacion.get("viable", False):
         razon = evaluacion.get("razon", "Eso no es posible aquí.")
         texto = _narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}")
-        return _respuesta_turno(jugador, estado, texto, None)
+        return _respuesta_turno(jugador, estado, texto, None, tiro)
 
     tipo = evaluacion.get("tipo", "accion")
     atributo = evaluacion.get("atributo", "fue")
@@ -171,7 +173,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
         critico = (tirada == 20 and tipo == "ataque")
         pifia = (tirada == 1)
         total = tirada + mod
-
+        tiro = tirada
         if pifia:
             ventaja_enemigos = True
             narracion.append(_narrar(
@@ -188,7 +190,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
                     f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
                     f"El combate termina: {motivo}. Narra el desenlace con tensión."
                 )
-                return _respuesta_turno(jugador, estado, texto, "resolucion")
+                return _respuesta_turno(jugador, estado, texto, "resolucion", tiro)
 
             dado_daño = evaluacion.get("dado_daño")
             if dado_daño:
@@ -235,7 +237,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
     if estado["combate_terminado"]:
         narracion.append(_narrar("Todos los enemigos han caído. El jugador ha ganado el combate."))
-        return _respuesta_turno(jugador, estado, "\n\n".join(narracion), "victoria")
+        return _respuesta_turno(jugador, estado, "\n\n".join(narracion), "victoria", tiro)
 
     for e_resumen in estado.get("enemigos_vivos", [])[:2]:
         info = json.loads(get_info_entidad.invoke({"entidad_id": e_resumen["id"]}))
@@ -282,10 +284,10 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     if jugador["vida_actual"] <= 0:
         narracion.append(_narrar(f"{jugador['nombre']} cae derrotado. Narra su caída."))
         estado_final = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "derrota")
+        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "derrota", tiro)
 
     estado_final = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-    return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None)
+    return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None, tiro)
 
 
 def combate(entidades_presentes: list) -> str:

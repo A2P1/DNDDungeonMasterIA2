@@ -64,7 +64,7 @@ def get_estado_combate(beat_id: str) -> str:
         entidades = json.load(f)
 
     enemigos_beat = [ # Filtramos todos los enemigos de ese beat, vivos o muertos
-        e for e in entidades.get("enemigos", [])
+        e for e in entidades.get("enemigos", []) + entidades.get("npcs", [])
         if e["beat_origen"] == beat_id
     ]
 

@@ -16,10 +16,10 @@ async function init() {
     document.getElementById("prompt-input").addEventListener('keydown', async function(event) {
         if (event.key === 'Enter') {
             let valor = document.getElementById("prompt-input").value;
-            //limpiarInput();
+            limpiarInput();
             if (modo === "narrativa") {
                 escribirTexto("\n\n> " + valor); // Escribimos el comando que el usuario ha introducido en el textarea
-                escribirTexto("------------------------------------------------------------------------------------------")
+                escribirTexto("\n------------------------------------------------------------------------------------------\n")
                 let resultado = await accionPartida(valor);
                 console.log("resultado:", resultado);
                 if (resultado.tipo === "combate_iniciado") {
@@ -38,12 +38,21 @@ async function init() {
             } else if (modo === "setupCampaña") {
                 tema = valor;
                 escribirTexto("\n\nHas elegido una campaña de " + tema + ". ¡Que comience la aventura!"); // Escribimos un mensaje con el tema de la campaña que el usuario ha introducido
+                escribirTexto("\n\nIniciando partida..."); // Escribimos un mensaje de que se está iniciando la partida
                 let inicio = await iniciarPartida(tema, nombre);
+                limpiarNarracion();
                 escribirTexto("\n\n" + inicio.narracion_inicio.texto); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
                 modo = "narrativa";
             } else if (modo === "combate") {
+                
                 let conflicto = await accionCombate(beat, valor);
                 escribirTexto("\n\n" + conflicto.narracion); // Escribimos la narración del combate que nos devuelve el backend en el textarea
+                escribirTexto("\n\n --------ESTADO COMBATE-------- \n");
+                escribirTexto("Vida del jugador: " + conflicto.jugador_vida + " / " + conflicto.jugador_vida_max + "\n");
+                escribirTexto("Enemigos vivos: " + conflicto.entidades_vivas.map(e => e.nombre + ": " + e.vida).join(", ") + "\n");
+                if (conflicto.tirada != null)
+                    escribirTexto("Tirada de dados: " + conflicto.tirada + "/20\n");
+                escribirTexto("\n ---------------- \n");
                 if (conflicto.combate_terminado === true) {
                     modo = "narrativa";
                 }
@@ -77,6 +86,9 @@ function Campaña() {
 }
 function limpiarInput() {
     document.getElementById("prompt-input").value = "";
+}
+function limpiarNarracion(){
+    document.getElementById("narration").value = "";
 }
 
 async function borrar() {
