@@ -40,11 +40,12 @@ async function init() {
                 escribirTexto("\n\nHas elegido una campaña de " + tema + ". ¡Que comience la aventura!"); // Escribimos un mensaje con el tema de la campaña que el usuario ha introducido
                 escribirTexto("\n\nIniciando partida..."); // Escribimos un mensaje de que se está iniciando la partida
                 let inicio = await iniciarPartida(tema, nombre);
-                limpiarNarracion();
+                limpiarNarracion(); 
                 escribirTexto("\n\n" + inicio.narracion_inicio.texto); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
                 modo = "narrativa";
             } else if (modo === "combate") {
-                
+                escribirTexto("\n\n> " + valor); // Escribimos el comando que el usuario ha introducido en el textarea
+                escribirTexto("\n------------------------------------------------------------------------------------------\n")
                 let conflicto = await accionCombate(beat, valor);
                 escribirTexto("\n\n" + conflicto.narracion); // Escribimos la narración del combate que nos devuelve el backend en el textarea
                 escribirTexto("\n\n --------ESTADO COMBATE-------- \n");
@@ -55,6 +56,9 @@ async function init() {
                 escribirTexto("\n ---------------- \n");
                 if (conflicto.combate_terminado === true) {
                     modo = "narrativa";
+                }
+                if (conflicto.jugador_vida <= 0) {
+                    escribirTexto("\n\n============================== GAME OVER ==============================\n");
                 }
             }
             
