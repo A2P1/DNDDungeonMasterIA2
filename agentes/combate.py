@@ -157,6 +157,16 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     dc = evaluacion.get("dc", 12)
     mod = jugador.get("atributos", {}).get(atributo, 0)
 
+    # Para ataques, sobreescribimos dc con la AC real del objetivo (más fiable que confiar en el LLM)
+    if evaluacion.get("tipo") == "ataque":
+        objetivo_id_para_ac = evaluacion.get("objetivo") or (enemigos_vivos[0]["id"] if enemigos_vivos else None)
+        if objetivo_id_para_ac:
+            try:
+                info_obj = json.loads(get_info_entidad.invoke({"entidad_id": objetivo_id_para_ac}))
+                dc = info_obj.get("ac", dc) # si no hay ac válido, mantenemos el dc del LLM
+            except (json.JSONDecodeError, TypeError):
+                pass # si la consulta falla, mantenemos el dc del LLM como red de seguridad
+
     ventaja_enemigos = False
 
     item_name = evaluacion.get("usa_item")
