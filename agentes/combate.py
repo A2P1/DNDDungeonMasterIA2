@@ -168,6 +168,10 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
         ))
     else:
         tirada = tirar_d20.invoke({})
+        if jugador.get("ventaja_proximo_turno"): # Si en el turno anterior un enemigo pifió, el jugador ataca con ventaja: tira 2d20 y se queda con la mejor
+            tirada = max(tirada, tirar_d20.invoke({}))
+            jugador["ventaja_proximo_turno"] = False # Consumimos el flag para que solo aplique a este ataque
+            _guardar_jugador(jugador)
         critico = (tirada == 20 and tipo == "ataque")
         pifia = (tirada == 1)
         total = tirada + mod
@@ -177,8 +181,8 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
             narracion.append(_narrar(
                 f"Jugador: '{accion}'. Check de {atributo.upper()}: "
                 f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente y el jugador queda expuesto. "
-                f"Narra una complicación: el arma se atasca, el jugador tropieza, "
-                f"se golpea a sí mismo o queda expuesto."
+                f"Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, a los enemigos cercanos, "
+                f"a objetos del lugar o cualquier cosa que tenga sentido en la escena. Evita repetir el mismo tipo de complicación cada vez."
             ))
         elif critico or total >= dc:
             if evaluacion.get("termina_combate"):
@@ -251,10 +255,13 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
         total_enemigo = tirada_enemigo + mod_enemigo
 
         if pifia_enemigo:
+            jugador["ventaja_proximo_turno"] = True # Simetría con el jugador: la pifia enemiga deja al jugador en posición ventajosa para su siguiente ataque
+            _guardar_jugador(jugador)
             narracion.append(_narrar(
                 f"{info['nombre']} intenta atacar con {info.get('arma', 'sus garras')}. "
-                f"NAT 1. ¡PIFIA! Narra una complicación dramática para el enemigo: tropieza, su arma se atasca, "
-                f"se golpea a sí mismo o queda expuesto brevemente."
+                f"NAT 1. ¡PIFIA! Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, "
+                f"a sus aliados, a objetos del lugar o a su propio cuerpo. Evita repetir el mismo tipo de complicación cada vez. "
+                f"El jugador queda en posición ventajosa para responder."
             ))
         elif critico_enemigo or total_enemigo >= jugador["ac"]:
             dado = info.get("dado_daño", "1d4")
