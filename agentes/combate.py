@@ -52,8 +52,6 @@ def _get_tipo_entidad(entidad_id: str) -> str:
     return "enemigo"
 
 
-def _modificador(valor: int) -> int:
-    return valor
 
 
 def _cargar_jugador() -> dict:
@@ -157,7 +155,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     tipo = evaluacion.get("tipo", "accion")
     atributo = evaluacion.get("atributo", "fue")
     dc = evaluacion.get("dc", 12)
-    mod = _modificador(jugador.get("atributos", {}).get(atributo, 0))
+    mod = jugador.get("atributos", {}).get(atributo, 0)
 
     ventaja_enemigos = False
 
@@ -244,7 +242,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
         atributo_ataque = info.get("atributo_ataque", "fue")
         if atributo_ataque not in ("fue", "des", "int"):
             atributo_ataque = "fue"
-        mod_enemigo = _modificador(info.get("atributos", {}).get(atributo_ataque, 2))
+        mod_enemigo = info.get("atributos", {}).get(atributo_ataque, 2)
         tirada_enemigo = tirar_d20.invoke({})
         if ventaja_enemigos:
             tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
