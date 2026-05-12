@@ -242,7 +242,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
         atributo_ataque = info.get("atributo_ataque", "fue")
         if atributo_ataque not in ("fue", "des", "int"):
             atributo_ataque = "fue"
-        mod_enemigo = info.get("atributos", {}).get(atributo_ataque, 2)
+        mod_enemigo = info.get("atributos", {}).get(atributo_ataque, 0)
         tirada_enemigo = tirar_d20.invoke({})
         if ventaja_enemigos:
             tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
