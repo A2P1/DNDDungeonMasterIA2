@@ -3,8 +3,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from typing import Optional
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from config import DIARIO_PATH
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+from config import DIARIO_PATH, MODEL_NAME, SECRETARIO_PROMPT_PATH
+
+load_dotenv()
 
 
 class NPC(BaseModel):
@@ -65,3 +70,22 @@ def aplicar_delta(d: Diario, delta: DeltaDiario) -> Diario: # Muta el diario con
             d.lugares.append(l)
     d.hechos.extend(delta.hechos)
     return d
+
+
+# ── Agente LLM ──────────────────────────────────────────────────────────────
+
+with open(SECRETARIO_PROMPT_PATH, 'r', encoding='utf-8') as f:
+    _PROMPT = f.read().strip()
+
+_llm = ChatOpenAI(model=MODEL_NAME, temperature=0.2).with_structured_output(DeltaDiario) # Temperatura baja: queremos fidelidad, no creatividad
+
+
+def extraer_delta(accion: str, narracion: str, diario: Diario) -> DeltaDiario: # Llama al LLM para extraer el delta del turno
+    return _llm.invoke([
+        SystemMessage(content=_PROMPT),
+        HumanMessage(content=(
+            f"Diario actual:\n{diario.model_dump_json(indent=2, exclude_none=True)}\n\n"
+            f"Acción del jugador: {accion}\n\n"
+            f"Narración generada: {narracion}"
+        ))
+    ])

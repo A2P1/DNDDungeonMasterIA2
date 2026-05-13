@@ -15,6 +15,7 @@ COMBATE_PROMPT_PATH = ROOT / "prompts" / "combate.txt"
 DIRECTOR_PROMPT_PATH = ROOT / "prompts" / "director.txt"
 ENRIQUECEDOR_PROMPT_PATH = ROOT / "prompts" / "enriquecedor.txt"
 CREADOR_PERSONAJE_PROMPT_PATH = ROOT / "prompts" / "creador_personaje.txt"
+SECRETARIO_PROMPT_PATH = ROOT / "prompts" / "secretario.txt"
 
 # Modelo que usan todos los agentes por defecto
 MODEL_NAME = "gpt-4o"
