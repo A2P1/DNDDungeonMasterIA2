@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_estado_combate
 from tools.dados import tirar_d20, tirar_dado
 from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
+from agentes.secretario import cargar_diario, guardar_diario, aplicar_delta, DeltaDiario # Para registrar el desenlace de cada combate en el diario
 from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME
 
 load_dotenv()
@@ -100,6 +101,11 @@ def _get_vivos(entidades: list) -> list:
 
 
 def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tirada: int) -> dict:
+    if resultado in ("victoria", "derrota", "resolucion"): # Al cerrar combate, registramos el hecho en el diario para que el narrador se entere en el siguiente turno
+        prefijo = {"victoria": "Combate ganado", "derrota": "Jugador derrotado en combate", "resolucion": "Combate resuelto sin matar a todos"}[resultado]
+        primera_frase = narracion.split('.')[0][:200] # Primera frase de la narración para dar sabor sin inflar el diario
+        diario = cargar_diario()
+        guardar_diario(aplicar_delta(diario, DeltaDiario(hechos=[f"{prefijo}: {primera_frase}"])))
     return {
         "narracion": narracion,
         "jugador_vida": jugador["vida_actual"],
