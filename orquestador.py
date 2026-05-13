@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI # El LLM que usamos para detectar intenc
 from langchain_core.messages import SystemMessage, HumanMessage # Tipos de mensaje para el LLM detector
 from langchain_core.output_parsers import JsonOutputParser # Para parsear las respuestas JSON del LLM
 
-from agentes.Narrador import narrador, narrador_inicio # El narrador principal de la partida
+from agentes.Narrador import narrador, narrador_inicio, resetear_memoria # El narrador principal de la partida
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña # Para crear y cargar la campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen # Para generar las fichas de enemigos y NPCs
 from agentes.combate import combate # El agente de combate
@@ -15,7 +15,7 @@ from tools.campana import get_siguiente_beat, marcar_beat_completado # Para nave
 from tools.inventario import add_item_to_inventory # Para añadir loot al inventario del jugador
 from tools.entidades import get_info_entidad # Para consultar el estado de una entidad concreta
 
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Rutas y configuración general
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Rutas y configuración general
 from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funciones batch de la UI (siguen usándose en sitios sin streaming)
                 sistema_msg, titulo_msg, prompt_jugador, prompt_input,
                 narrador_msg_inicio, narrador_msg_chunk, narrador_msg_fin, # Helpers de streaming para narración estándar
@@ -53,9 +53,10 @@ def cargar_stats() -> dict: # Cargamos los datos del jugador
         return json.load(f)
 
 def borrar_campaña():
-    for path in [CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, RESUMEN_PATH]:
+    for path in [CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, RESUMEN_PATH, DIARIO_PATH]:
         if path.exists():
             path.unlink()
+    resetear_memoria() # La ventana del narrador es global de módulo: si no la limpiamos, arrastra el contexto de la partida anterior
 
 def _get_entidades_presentes() -> list: # Devuelve las entidades vivas del beat actual (enemigos y NPCs registrados en entidades.json)
     raw = get_siguiente_beat.invoke({}) 

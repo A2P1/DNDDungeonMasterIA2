@@ -76,6 +76,10 @@ def _actualizar_diario(accion: str, narracion: str) -> None: # Tras un turno, pi
     guardar_diario(aplicar_delta(diario, delta))
 
 
+def resetear_memoria() -> None: # Vacía la ventana dejando solo el SystemMessage del prompt. Se llama al iniciar campaña nueva para que no arrastre contexto de la anterior.
+    del messages[1:]
+
+
 def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
     respuesta = llm_tools.invoke([messages[0], _diario_msg(), *messages[1:], HumanMessage(content=user_input)]) # Primera llamada al LLM (con el diario inyectado tras el prompt) para comprobar si la respuesta requiere el uso de tools
 
