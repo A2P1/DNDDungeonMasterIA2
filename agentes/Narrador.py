@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI # El modelo de OpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage # Los tipos de mensaje que usamos en la conversación
 from config import NARRADOR_PROMPT_PATH, TEMPERATURE_NARRADOR # Rutas y configuración del narrador
 
-from agentes.secretario import cargar_diario # Memoria estructurada a largo plazo (sustituye a resumen.txt)
+from agentes.secretario import cargar_diario, guardar_diario, extraer_delta, aplicar_delta # Memoria estructurada a largo plazo (sustituye a resumen.txt)
 
 from tools.stats import get_status # Tool para consultar el estado del jugador
 from tools.resumen import mostrar_resumen # Tool para mostrar el resumen de la partida
@@ -70,6 +70,12 @@ def _truncar_ventana() -> None: # Mantiene messages[0] (prompt fijo) + últimos 
         del messages[1:-WINDOW_MESSAGES]
 
 
+def _actualizar_diario(accion: str, narracion: str) -> None: # Tras un turno, pide al secretario que extraiga el delta y lo persiste en el diario
+    diario = cargar_diario()
+    delta = extraer_delta(accion, narracion, diario)
+    guardar_diario(aplicar_delta(diario, delta))
+
+
 def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
     respuesta = llm_tools.invoke([messages[0], _diario_msg(), *messages[1:], HumanMessage(content=user_input)]) # Primera llamada al LLM (con el diario inyectado tras el prompt) para comprobar si la respuesta requiere el uso de tools
 
@@ -99,6 +105,7 @@ def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Pr
         messages.append(HumanMessage(content=user_input))
         messages.append(AIMessage(content=contenido_final))
         _truncar_ventana() # Mantenemos la ventana acotada; el diario (no resumen.txt) es ahora la memoria a largo plazo
+        _actualizar_diario(user_input, contenido_final) # El secretario extrae y persiste lo digno de recordar a largo plazo
 
         return contenido_final # Devolvemos el texto de la narración final de las tools
 
@@ -107,6 +114,7 @@ def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Pr
         contenido = _generar(llm, [messages[0], _diario_msg(), *messages[1:]], on_chunk) # Generamos el texto narrativo con el diario inyectado tras el prompt
         messages.append(AIMessage(content=contenido)) # Almacenamos la respuesta de la IA en la ventana
         _truncar_ventana() # Mantenemos la ventana acotada
+        _actualizar_diario(user_input, contenido) # El secretario extrae y persiste lo digno de recordar a largo plazo
 
         return contenido # Devolvemos el contenido generado
 
@@ -129,5 +137,6 @@ def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], No
     contenido = _generar(llm, [messages[0], _diario_msg(), *messages[1:]], on_chunk) # Imprimimos el texto a partir del prompt, el diario (vacío en el inicio) y el contexto de la campaña
     messages.append(AIMessage(content=contenido)) # Guardamos la respuesta generada en la ventana
     _truncar_ventana() # Mantenemos la ventana acotada
+    _actualizar_diario('Inicio de la partida', contenido) # El secretario captura los hechos iniciales (lugar, gancho, NPCs presentes)
 
     return contenido # Devolvemos la narración de apertura al jugador
