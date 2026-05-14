@@ -91,12 +91,14 @@ def _get_entidades_presentes() -> list: # Devuelve las entidades vivas del beat 
     return presentes 
 
 def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list: # Genera un nuevo enemigo que no ha sido generado al crear la campaña
-    llm_gen = ChatOpenAI(model=MODEL_NAME, temperature=0.3) 
+    jugador_nombre = cargar_stats().get("nombre", "") if STATS_PATH.exists() else "" # Necesario para evitar que el LLM bautice al enemigo con el nombre del jugador
+    llm_gen = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
     respuesta = llm_gen.invoke([ 
         SystemMessage(content=(
             "Eres un generador de stats de enemigos para D&D. "
             "Basándote en el contexto narrativo, genera stats para el o los enemigos "
             "que el jugador quiere atacar. "
+            f"IMPORTANTE: el jugador se llama '{jugador_nombre}'. NUNCA uses ese nombre para el enemigo — el enemigo es una entidad distinta del jugador. "
             "Responde SOLO con JSON válido (lista), sin texto extra:\n"
             "[\n"
             "  {\n"
@@ -126,11 +128,16 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list: # Genera 
         if match:
             contenido = match.group(1).strip() 
 
-        enemigos = json.loads(contenido) 
-        if not isinstance(enemigos, list): 
+        enemigos = json.loads(contenido)
+        if not isinstance(enemigos, list):
             return []
 
-        with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f: 
+        if jugador_nombre: # Defensa post-LLM: descartamos cualquier enemigo bautizado con el nombre del jugador, pese a la instrucción del prompt
+            enemigos = [e for e in enemigos if e.get("nombre", "").strip().lower() != jugador_nombre.strip().lower()]
+            if not enemigos:
+                return []
+
+        with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
             entidades = json.load(f)
 
         ids_existentes = {e["id"] for e in entidades.get("enemigos", [])} 

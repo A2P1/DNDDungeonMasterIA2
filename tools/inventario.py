@@ -124,9 +124,12 @@ def verificar_arma_en_accion(accion: str, armas: list) -> dict: # Detecta si el 
                 "Eres un detector de armas en acciones de combate de rol. "
                 "Dado el inventario de armas del jugador y su acción, determina:\n"
                 "1. ¿El jugador menciona usar algún arma específica? Si no, arma_mencionada debe ser null.\n"
+                "Considera también PALABRAS DERIVADAS del arma como mención: 'espadazo' → 'espada', "
+                "'hachazo' → 'hacha', 'puñalada' → 'daga/puñal', 'flechazo' → 'arco', 'mazazo' → 'maza'.\n"
                 "2. Si menciona un arma, ¿está en el inventario? "
-                "Busca coincidencias flexibles: 'espada' coincide con 'espada larga', "
-                "'el hacha' con 'hacha de guerra', 'mi daga' con 'daga', etc.\n"
+                "Busca coincidencias flexibles: si el nombre que dice el jugador es SUBPALABRA o sinónimo "
+                "de un arma del inventario, ES coincidencia. Ej: 'espada' = 'espada larga', "
+                "'hacha' = 'hacha de mano', 'daga' = 'daga ritual'.\n"
                 "Si coincide, devuelve el nombre exacto del inventario. Si no coincide, devuelve el nombre tal cual lo dijo."
             )),
             HumanMessage(content=f"Armas en inventario: {nombres}\nAcción del jugador: {accion}")

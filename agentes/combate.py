@@ -181,7 +181,13 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
 
     if not evaluacion.get("viable", False):
         razon = evaluacion.get("razon", "Eso no es posible aquí.")
-        texto = _narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}")
+        texto = _narrar( # Prompt explícito: el LLM tendía a hacer eco de los datos en JSON; ahora le pedimos texto plano narrativo
+            f"El jugador acaba de decir: '{accion}'. En combate, esa acción no es viable porque: {razon}. "
+            f"INSTRUCCIÓN: narra en 1-2 frases breves, en tercera persona, que el jugador titubea o pierde el momento. "
+            f"Devuelve SOLO la narración como texto plano. NO uses JSON, NO uses listas, NO uses comillas estructuradas."
+        )
+        if texto.strip().startswith("{"): # Red defensiva: si el LLM sigue devolviendo formato de datos, sustituimos por un mensaje neutro
+            texto = f"{jugador.get('nombre', 'El guerrero')} titubea. Necesitas precisar mejor tu siguiente movimiento."
         return _respuesta_turno(jugador, estado, texto, None, tiro)
 
     tipo = evaluacion.get("tipo", "accion")
