@@ -68,15 +68,28 @@ def _guardar_jugador(jugador: dict):
         json.dump(jugador, f, indent=2, ensure_ascii=False)
 
 
-def _contexto_escena_msgs() -> list: # Beat + diario como SystemMessages para que el LLM de combate respete la ubicación, los NPCs y los hechos ya establecidos
+def _contexto_escena_msgs() -> list: # Beat + diario + entidades vivas del beat como SystemMessages: el LLM de combate no debe inventar lugar, NPCs ni armas
+    msgs = []
     raw_beat = get_siguiente_beat.invoke({})
+    beat_id = "" # Lo necesitamos para filtrar las entidades del beat actual
     if raw_beat == "CAMPAÑA COMPLETADA":
-        beat_msg = SystemMessage(content="BEAT ACTUAL: campaña completada.")
+        msgs.append(SystemMessage(content="BEAT ACTUAL: campaña completada."))
     else:
-        beat_msg = SystemMessage(content=f"BEAT ACTUAL (escena en la que ocurre el combate, respeta lugar y NPCs):\n{raw_beat}")
+        msgs.append(SystemMessage(content=f"BEAT ACTUAL (escena en la que ocurre el combate, respeta lugar y NPCs):\n{raw_beat}"))
+        try:
+            beat_id = json.loads(raw_beat).get("beat", {}).get("id", "")
+        except (json.JSONDecodeError, AttributeError):
+            pass
     diario = cargar_diario()
-    diario_msg = SystemMessage(content=f"DIARIO (memoria de la partida, NO contradigas lo establecido):\n{diario.model_dump_json(indent=2, exclude_none=True)}")
-    return [beat_msg, diario_msg]
+    msgs.append(SystemMessage(content=f"DIARIO (memoria de la partida, NO contradigas lo establecido):\n{diario.model_dump_json(indent=2, exclude_none=True)}"))
+    if ENTIDADES_PATH.exists(): # Entidades vivas (enemigos del beat actual + NPCs activos): arma, descripción y atributos para que la narración no las invente
+        with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+            entidades = json.load(f)
+        relevantes = [e for e in entidades.get("enemigos", []) if e.get("beat_origen") == beat_id and e.get("estado") == "vivo"]
+        relevantes += [n for n in entidades.get("npcs", []) if n.get("estado") == "vivo"]
+        if relevantes:
+            msgs.append(SystemMessage(content=f"ENTIDADES PRESENTES (respeta nombre, arma y descripción al narrar):\n{json.dumps(relevantes, indent=2, ensure_ascii=False)}"))
+    return msgs
 
 
 def _narrar(contexto: str) -> str:
@@ -287,7 +300,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
             jugador["ventaja_proximo_turno"] = True # Simetría con el jugador: la pifia enemiga deja al jugador en posición ventajosa para su siguiente ataque
             _guardar_jugador(jugador)
             narracion.append(_narrar(
-                f"{info['nombre']} intenta atacar con {info.get('arma', 'sus garras')}. "
+                f"{info['nombre']} intenta atacar con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
                 f"NAT 1. ¡PIFIA! Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, "
                 f"a sus aliados, a objetos del lugar o a su propio cuerpo. Evita repetir el mismo tipo de complicación cada vez. "
                 f"El jugador queda en posición ventajosa para responder."
@@ -305,13 +318,13 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
             jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo)
             _guardar_jugador(jugador)
             narracion.append(_narrar(
-                f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
+                f"{info['nombre']} ataca al jugador con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
                 f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
                 f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
             ))
         else:
             narracion.append(_narrar(
-                f"{info['nombre']} ataca al jugador con {info.get('arma', 'sus garras')}. "
+                f"{info['nombre']} ataca al jugador con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
                 f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
             ))
 
@@ -330,13 +343,13 @@ def combate(entidades_presentes: list) -> str:
     if not entidades_presentes:
         return "victoria"
 
-    nombres = ", ".join(
-        f"{e['nombre']} (AC:{e.get('ac', 10)}, HP:{e.get('vida_actual', '?')})"
+    nombres = ", ".join( # Incluimos arma y descripción: sin esto el LLM inventa armas (ej. "garras" para una flautista)
+        f"{e['nombre']} [arma: {e.get('arma') or '?'}, descripción: {e.get('descripcion', '')}] (AC:{e.get('ac', 10)}, HP:{e.get('vida_actual', '?')})"
         for e in entidades_presentes
     )
     arma_jugador = jugador.get("arma", {}).get("nombre", "sus puños")
     return _narrar(
         f"El jugador ({jugador['nombre']}, armado con {arma_jugador}) se enfrenta a: {nombres}. "
-        f"Describe cómo irrumpe el combate de forma brusca e imprevista, presentando a los enemigos y la tensión del momento. "
+        f"Describe cómo irrumpe el combate de forma brusca e imprevista, respetando arma y descripción de cada entidad. "
         f"No resuelvas ningún ataque todavía."
     )
