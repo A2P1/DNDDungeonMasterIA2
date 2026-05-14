@@ -4,23 +4,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz al pa
 
 import json # Para leer y escribir el stats.json
 import re # Para extraer dados de efectos (ej: "2d4" en pociones)
-from typing import Optional
 from dotenv import load_dotenv # Para cargar la API key desde el .env
-from pydantic import BaseModel
 from langchain_core.tools import tool # Decorador que convierte funciones en tools para el LLM
-from langchain_openai import ChatOpenAI # El LLM que usamos para detectar armas en la acción
-from langchain_core.messages import SystemMessage, HumanMessage # Tipos de mensaje para el LLM
-from config import STATS_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Ruta a stats.json y configuración del modelo
+from config import STATS_PATH # Ruta a stats.json
 
 load_dotenv() # Cargamos la API key del .env
-
-
-class DeteccionArma(BaseModel): # Esquema estructurado para la detección de armas en la acción
-    arma_mencionada: Optional[str] = None # Nombre del arma que menciona el jugador, o null si no menciona ninguna
-    en_inventario: bool # Si el arma mencionada coincide con alguna del inventario
-
-
-_llm = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA).with_structured_output(DeteccionArma) # LLM con structured output: devuelve directamente un DeteccionArma validado
 
 
 @tool
@@ -103,48 +91,3 @@ def usar_item(nombre_item: str) -> str:
         return (f"Usas '{item['nombre']}'. Recuperas {hp_recuperado} HP. "
                 f"Vida: {stats['vida_actual']}/{stats['vida_max']}")
     return f"Usas '{item['nombre']}'. Efecto: {efecto}" # Si no recupera HP, solo mostramos el efecto
-
-
-def get_armas(jugador: dict) -> list: # Filtra el inventario del jugador y devuelve solo las armas
-    return [item for item in jugador.get("inventario", []) if item.get("tipo") == "arma"]
-
-
-def verificar_arma_en_accion(accion: str, armas: list) -> dict: # Detecta si el jugador menciona un arma en su acción y comprueba si la tiene en el inventario
-    """Detecta si el usuario menciona algún arma en su acción de ataque.
-    Por ejemplo: "Le ataco con mi cuchillo" -- Detectar que el arma con la que quiere atacar es el cuchillo
-    """
-    if not armas: # Si el jugador no tiene armas, no puede mencionar ninguna
-        return {"estado": "no_mencionada", "arma": None, "nombre": None}
-
-    nombres = [a["nombre"] for a in armas] # Extraemos los nombres de las armas para pasárselos al LLM
-
-    try:
-        resultado = _llm.invoke([ # Devuelve un DeteccionArma ya validado gracias a structured output
-            SystemMessage(content=(
-                "Eres un detector de armas en acciones de combate de rol. "
-                "Dado el inventario de armas del jugador y su acción, determina:\n"
-                "1. ¿El jugador menciona usar algún arma específica? Si no, arma_mencionada debe ser null.\n"
-                "Considera también PALABRAS DERIVADAS del arma como mención: 'espadazo' → 'espada', "
-                "'hachazo' → 'hacha', 'puñalada' → 'daga/puñal', 'flechazo' → 'arco', 'mazazo' → 'maza'.\n"
-                "2. Si menciona un arma, ¿está en el inventario? "
-                "Busca coincidencias flexibles: si el nombre que dice el jugador es SUBPALABRA o sinónimo "
-                "de un arma del inventario, ES coincidencia. Ej: 'espada' = 'espada larga', "
-                "'hacha' = 'hacha de mano', 'daga' = 'daga ritual'.\n"
-                "Si coincide, devuelve el nombre exacto del inventario. Si no coincide, devuelve el nombre tal cual lo dijo."
-            )),
-            HumanMessage(content=f"Armas en inventario: {nombres}\nAcción del jugador: {accion}")
-        ])
-
-        nombre = resultado.arma_mencionada # Nombre del arma mencionada (o None)
-
-        if not nombre: # Si el LLM dice que no se menciona ningún arma, devolvemos no_mencionada
-            return {"estado": "no_mencionada", "arma": None, "nombre": None}
-
-        if resultado.en_inventario: # Si el arma está en el inventario, buscamos su ficha completa
-            arma = next((a for a in armas if a["nombre"].lower() == nombre.lower()), None) # Buscamos el objeto arma por nombre
-            if arma:
-                return {"estado": "encontrada", "arma": arma, "nombre": nombre} # Devolvemos el arma encontrada
-
-        return {"estado": "no_en_inventario", "arma": None, "nombre": nombre} # Si no está en el inventario, avisamos con el nombre que dijo
-    except Exception:
-        return {"estado": "no_mencionada", "arma": None, "nombre": None} # Si la llamada falla, asumimos que no se menciona arma

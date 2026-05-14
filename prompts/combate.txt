@@ -27,6 +27,7 @@ Campos que debes rellenar en la evaluación (el formato lo enforza el schema, t�
   "atributo": "fue | des | con | int | sab | car",
   "dc": 8-18,
   "dado_daño": "1d4 | 1d6 | 1d8 | null",
+  "arma_usada": "string - nombre EXACTO del arma del inventario que usa el jugador, o null si no usa arma (puños, conjuro, etc)",
   "objetivo": "string - id del enemigo afectado o null si afecta a todos",
   "efecto_exito": "string - qué pasa si la tirada tiene éxito",
   "efecto_fallo": "string - qué pasa si la tirada falla",
@@ -42,7 +43,8 @@ Cualquier acción cuya intención principal es golpear/dañar a un enemigo con u
 Incluye: "ataco", "le doy con mi espada", "le clavo la daga", "le pego un hachazo", etc.
 - atributo: "fue" para cuerpo a cuerpo, "des" para ataques a distancia
 - dc: DEBE ser la AC (Armor Class) del enemigo objetivo. Mira los datos del enemigo en el contexto
-- dado_daño: DEBE ser el dado de daño del arma del jugador. Mira los datos del jugador en el contexto
+- arma_usada: nombre EXACTO del arma del inventario del jugador que está usando. Identifícala a partir de la acción incluso si la menciona como derivado: "espadazo"→"espada larga", "hachazo"→"hacha de mano", "puñalada"→"daga", "flechazo"→"arco", "mazazo"→"maza". Si la acción no menciona arma específica, usa el arma equipada por defecto. Si el jugador menciona un arma que NO está en su inventario, marca viable=false con la razón.
+- dado_daño: DEBE coincidir con el dado_daño del "arma_usada" tal como aparece en el inventario del contexto. NO inventes valores.
 - objetivo: el id del enemigo al que ataca. Si no menciona a ninguno específico, elige al primero de la lista
 
 TIPO "accion":

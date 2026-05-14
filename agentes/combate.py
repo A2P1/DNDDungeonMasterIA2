@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_estado_combate
 from tools.dados import tirar_d20, tirar_dado
-from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
+from tools.inventario import usar_item
 from tools.campana import get_siguiente_beat # Para inyectar el beat actual como contexto narrativo del combate
 from agentes.secretario import cargar_diario, guardar_diario, aplicar_delta, DeltaDiario # Para registrar el desenlace de cada combate en el diario
 from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME
@@ -28,6 +28,7 @@ class EvaluacionAccion(BaseModel):
     atributo: Optional[Literal["fue", "des", "con", "int", "sab", "car"]] = None
     dc: Optional[int] = Field(default=None, ge=8, le=20)
     dado_daño: Optional[str] = None
+    arma_usada: Optional[str] = None # Nombre del arma del inventario que el LLM ha elegido para esta acción; el código verifica contra el inventario real antes de aplicar daño
     objetivo: Optional[str] = None
     efecto_exito: Optional[str] = None
     efecto_fallo: Optional[str] = None
@@ -154,25 +155,13 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     if not enemigos_vivos:
         return _respuesta_turno(jugador, estado, "No quedan enemigos.", "victoria", tiro)
 
-    armas_inv = get_armas(jugador)
-    if armas_inv:
-        verificacion = verificar_arma_en_accion(accion, armas_inv)
-        if verificacion["estado"] == "no_en_inventario":
-            nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
-            texto = _narrar(
-                f"El jugador intenta usar '{verificacion['nombre']}' pero no lo tiene. "
-                f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma."
-            )
-            return _respuesta_turno(jugador, estado, texto, None, tiro)
-        elif verificacion["estado"] == "encontrada":
-            jugador["arma"] = verificacion["arma"]
-            _guardar_jugador(jugador)
-
     arma_actual = jugador.get("arma", {})
+    armas_inv = [i for i in jugador.get("inventario", []) if i.get("tipo") == "arma"] # Inventario completo de armas: el LLM elegirá la apropiada según la acción del jugador
     consumibles = [i for i in jugador.get("inventario", []) if i.get("tipo") == "consumible"]
     contexto = (
-        f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
-        f"Arma: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')}), "
+        f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')})\n"
+        f"Armas en inventario: {json.dumps(armas_inv, ensure_ascii=False)}\n"
+        f"Arma equipada por defecto: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')})\n"
         f"Atributos: {json.dumps(jugador.get('atributos', {}))}\n"
         f"Consumibles disponibles: {json.dumps(consumibles, ensure_ascii=False)}\n"
         f"Enemigos vivos: {json.dumps(enemigos_vivos, ensure_ascii=False)}"
@@ -243,6 +232,11 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
                 return _respuesta_turno(jugador, estado, texto, "resolucion", tiro)
 
             dado_daño = evaluacion.get("dado_daño")
+            arma_usada_nombre = evaluacion.get("arma_usada") # Si el LLM identificó un arma del inventario, sobreescribimos dado_daño con el valor real del inventario (single source of truth)
+            if arma_usada_nombre:
+                arma_inv = next((a for a in jugador.get("inventario", []) if a.get("tipo") == "arma" and a["nombre"].lower() == arma_usada_nombre.lower()), None)
+                if arma_inv and arma_inv.get("dado_daño"):
+                    dado_daño = arma_inv["dado_daño"]
             if dado_daño:
                 if critico:
                     partes = dado_daño.lower().split("d")
