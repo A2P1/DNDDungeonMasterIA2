@@ -131,7 +131,7 @@ def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Pr
 
 
 def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], None]] = None): # Genera el inicio de la historia
-    messages.append(SystemMessage(content='MODO_INICIO: SI')) # Declaramos al LLM que tiene que comenzar la historia
+    inicio_flag = SystemMessage(content='MODO_INICIO: SI') # Bandera SOLO para esta llamada (no se persiste en messages[] para que no contamine los turnos siguientes)
     if campaña: # Si existe la campaña generada por el director, construimos el contexto para que el LLM genere el inicio con la ambientación
         contexto = (
             f"CONTEXTO DE LA CAMPAÑA:\n"
@@ -145,7 +145,7 @@ def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], No
 
     messages.append(HumanMessage(content='Inicia la partida. Presenta la escena usando el gancho y la ambientación de la campaña.')) # Genera y almacena la primera escena
 
-    contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), *messages[1:]], on_chunk) # Imprimimos el texto a partir del prompt, el diario (vacío en el inicio), el beat 1 de la campaña y el contexto general
+    contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), inicio_flag, *messages[1:]], on_chunk) # Inicio: prompt + diario (vacío) + beat 1 + bandera de inicio (temporal) + contexto general
     messages.append(AIMessage(content=contenido)) # Guardamos la respuesta generada en la ventana
     _truncar_ventana() # Mantenemos la ventana acotada
     _actualizar_diario('Inicio de la partida', contenido) # El secretario captura los hechos iniciales (lugar, gancho, NPCs presentes)
