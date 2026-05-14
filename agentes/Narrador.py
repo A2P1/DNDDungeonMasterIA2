@@ -2,11 +2,12 @@ import sys # Necesario para manipular el path antes de los otros imports
 from pathlib import Path # Para manejar rutas de forma más cómoda
 sys.path.insert(0, str(Path(__file__).parent.parent)) # Añadimos la raíz al path para que los imports del proyecto funcionen
 
+import json # Para leer stats.json y construir el resumen del jugador a inyectar en cada turno
 from typing import Callable, Optional # Para tipar el callback opcional de streaming
 from dotenv import load_dotenv # Para cargar la API key desde el .env
 from langchain_openai import ChatOpenAI # El modelo de OpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage # Los tipos de mensaje que usamos en la conversación
-from config import NARRADOR_PROMPT_PATH, TEMPERATURE_NARRADOR # Rutas y configuración del narrador
+from config import NARRADOR_PROMPT_PATH, STATS_PATH, TEMPERATURE_NARRADOR # Rutas y configuración del narrador
 
 from agentes.secretario import cargar_diario, guardar_diario, extraer_delta, aplicar_delta # Memoria estructurada a largo plazo (sustituye a resumen.txt)
 
@@ -72,6 +73,14 @@ def _beat_msg() -> SystemMessage: # Consulta el beat activo de la campaña y lo 
     return SystemMessage(content=f"BEAT ACTUAL (escena que el director ha preparado, úsalo como guía narrativa):\n{raw}")
 
 
+def _stats_msg() -> SystemMessage: # Ficha completa del jugador. Crítico: sin esto el narrador inventa quién es el jugador y qué lleva
+    if not STATS_PATH.exists(): # Defensa: si todavía no se ha creado el personaje, devolvemos un marcador inocuo
+        return SystemMessage(content="JUGADOR: aún no creado")
+    with open(STATS_PATH, 'r', encoding='utf-8') as f:
+        stats = json.load(f)
+    return SystemMessage(content=f"JUGADOR (ficha completa, nombre/clase/HP/atributos/inventario):\n{json.dumps(stats, indent=2, ensure_ascii=False)}")
+
+
 def _truncar_ventana() -> None: # Mantiene messages[0] (prompt fijo) + últimos WINDOW_MESSAGES pares Human/AI, descarta el resto
     if len(messages) > 1 + WINDOW_MESSAGES:
         del messages[1:-WINDOW_MESSAGES]
@@ -88,7 +97,7 @@ def resetear_memoria() -> None: # Vacía la ventana dejando solo el SystemMessag
 
 
 def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
-    respuesta = llm_tools.invoke([messages[0], _diario_msg(), _beat_msg(), *messages[1:], HumanMessage(content=user_input)]) # Primera llamada al LLM (con diario + beat actual inyectados tras el prompt) para comprobar si la respuesta requiere el uso de tools
+    respuesta = llm_tools.invoke([messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:], HumanMessage(content=user_input)]) # Primera llamada al LLM (con diario + beat + ficha del jugador inyectados tras el prompt) para comprobar si la respuesta requiere el uso de tools
 
     if respuesta.tool_calls: # Si el LLM quiere usar herramientas, las ejecutamos todas antes de pedir la respuesta final
         tool_messages = [] # Aquí guardamos los resultados de cada herramienta
@@ -104,7 +113,7 @@ def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Pr
         # Pasamos messages[] para que el narrador recuerde el texto generado por las tools
         contenido_final = _generar(
             llm_tools,
-            [messages[0], _diario_msg(), _beat_msg(), *messages[1:],
+            [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:],
                 HumanMessage(content=user_input), # Le pasamos el input del usuario
                 respuesta, # Las tools elegidas
                 *tool_messages # Los resultados generado por las tools
@@ -122,7 +131,7 @@ def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Pr
 
     else: # Si se confirma que el usuario no necesita tools para esta interacción, se continúa la historia
         messages.append(HumanMessage(content=user_input)) # Almacenamos el input del usuario
-        contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), *messages[1:]], on_chunk) # Generamos el texto narrativo con diario + beat actual inyectados tras el prompt
+        contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:]], on_chunk) # Generamos el texto narrativo con diario + beat + ficha del jugador inyectados tras el prompt
         messages.append(AIMessage(content=contenido)) # Almacenamos la respuesta de la IA en la ventana
         _truncar_ventana() # Mantenemos la ventana acotada
         _actualizar_diario(user_input, contenido) # El secretario extrae y persiste lo digno de recordar a largo plazo
@@ -145,7 +154,7 @@ def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], No
 
     messages.append(HumanMessage(content='Inicia la partida. Presenta la escena usando el gancho y la ambientación de la campaña.')) # Genera y almacena la primera escena
 
-    contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), inicio_flag, *messages[1:]], on_chunk) # Inicio: prompt + diario (vacío) + beat 1 + bandera de inicio (temporal) + contexto general
+    contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), inicio_flag, *messages[1:]], on_chunk) # Inicio: prompt + diario (vacío) + beat 1 + ficha del jugador + bandera de inicio (temporal) + contexto general
     messages.append(AIMessage(content=contenido)) # Guardamos la respuesta generada en la ventana
     _truncar_ventana() # Mantenemos la ventana acotada
     _actualizar_diario('Inicio de la partida', contenido) # El secretario captura los hechos iniciales (lugar, gancho, NPCs presentes)

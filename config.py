@@ -21,7 +21,7 @@ SECRETARIO_PROMPT_PATH = ROOT / "prompts" / "secretario.txt"
 MODEL_NAME = "gpt-4o"
 
 # Temperaturas: alta para creatividad, baja para lógica y coherencia
-TEMPERATURE_NARRADOR = 0.9 # Alta para que el narrador sea creativo y variado
+TEMPERATURE_NARRADOR = 0.7 # Equilibrio: creativo pero menos verboso/decorativo que con 0.9
 TEMPERATURE_LOGICA = 0.0 # Cero para detectores y decisiones lógicas (sin inventarse cosas)
 TEMPERATURE_ENRIQUECEDOR = 0.3 # Media-baja para fichas coherentes pero con algo de variedad
 
