@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from tools.entidades import dañar_enemigo, dañar_npc, get_info_entidad, get_estado_combate
 from tools.dados import tirar_d20, tirar_dado
 from tools.inventario import get_armas, verificar_arma_en_accion, usar_item
+from tools.campana import get_siguiente_beat # Para inyectar el beat actual como contexto narrativo del combate
 from agentes.secretario import cargar_diario, guardar_diario, aplicar_delta, DeltaDiario # Para registrar el desenlace de cada combate en el diario
 from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME
 
@@ -67,9 +68,21 @@ def _guardar_jugador(jugador: dict):
         json.dump(jugador, f, indent=2, ensure_ascii=False)
 
 
+def _contexto_escena_msgs() -> list: # Beat + diario como SystemMessages para que el LLM de combate respete la ubicación, los NPCs y los hechos ya establecidos
+    raw_beat = get_siguiente_beat.invoke({})
+    if raw_beat == "CAMPAÑA COMPLETADA":
+        beat_msg = SystemMessage(content="BEAT ACTUAL: campaña completada.")
+    else:
+        beat_msg = SystemMessage(content=f"BEAT ACTUAL (escena en la que ocurre el combate, respeta lugar y NPCs):\n{raw_beat}")
+    diario = cargar_diario()
+    diario_msg = SystemMessage(content=f"DIARIO (memoria de la partida, NO contradigas lo establecido):\n{diario.model_dump_json(indent=2, exclude_none=True)}")
+    return [beat_msg, diario_msg]
+
+
 def _narrar(contexto: str) -> str:
     msgs = [
         SystemMessage(content=system_prompt_combate + "\n\nMODO: NARRAR"),
+        *_contexto_escena_msgs(), # Inyectamos beat + diario para que el combate no invente ubicación ni mezcle el nombre del jugador con NPCs
         HumanMessage(content=contexto)
     ]
     return llm.invoke(msgs).content
