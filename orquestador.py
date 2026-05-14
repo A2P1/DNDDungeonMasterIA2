@@ -199,20 +199,20 @@ def narrar_inicio_partida():
     return {"tipo": "narracion", "texto": narracion_inicio}
 
 def procesar_accion(accion: str):
-    resumen = RESUMEN_PATH.read_text(encoding='utf-8').strip() if RESUMEN_PATH.exists() else ""
-    if resumen:
-        quiere_atacar, hay_objetivo = _detectar_intento_ataque(accion, resumen)
-        if quiere_atacar and hay_objetivo:
-            entidades = _get_entidades_presentes()
-            if not entidades and _hay_entidad_atacable(accion, resumen):
-                entidades = _generar_enemigo_narrativo(accion, resumen)
-            if entidades:
-                beat1 = entidades[0].get("beat_origen", "temp")
-                return {"tipo": "combate_iniciado", "entidades": entidades, "texto": combate(entidades), "beat_id": beat1} # Como el tema del combate se gestiona a través de la api, aquí solo devolvemos que el combate ha iniciado
-        narracion = narrador(accion)
-        return {"tipo": "narracion", "texto": narracion}
-    
-    return narrar_inicio_partida()
+    if not campaña_existe(): # Si todavía no hay campaña, el único camino válido es generar la apertura
+        return narrar_inicio_partida()
+
+    contexto = DIARIO_PATH.read_text(encoding='utf-8').strip() if DIARIO_PATH.exists() else "" # Contexto narrativo para los detectores: el diario sustituye al antiguo resumen.txt
+    quiere_atacar, hay_objetivo = _detectar_intento_ataque(accion, contexto)
+    if quiere_atacar and hay_objetivo:
+        entidades = _get_entidades_presentes()
+        if not entidades and _hay_entidad_atacable(accion, contexto):
+            entidades = _generar_enemigo_narrativo(accion, contexto)
+        if entidades:
+            beat1 = entidades[0].get("beat_origen", "temp")
+            return {"tipo": "combate_iniciado", "entidades": entidades, "texto": combate(entidades), "beat_id": beat1} # Como el tema del combate se gestiona a través de la api, aquí solo devolvemos que el combate ha iniciado
+    narracion = narrador(accion)
+    return {"tipo": "narracion", "texto": narracion}
 
                 
 
