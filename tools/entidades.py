@@ -22,7 +22,6 @@ def get_enemigos_beat(beat_id: str) -> str:
 
     if not enemigos: # Si no hay enemigos vivos en ese beat, avisamos al LLM
         return f"No hay enemigos vivos en el beat '{beat_id}'"
-
     return json.dumps(enemigos, ensure_ascii=False) # Devolvemos la lista de enemigos vivos como JSON
 
 

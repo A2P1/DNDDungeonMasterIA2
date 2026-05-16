@@ -34,17 +34,15 @@ def iniciar (tema, personaje):
         else:
             stats = cargar_stats()
     else:
-        stats = crear_personaje(personaje)
         campaña = generar_campaña(tema, personaje)
+        stats = crear_personaje(personaje, campaña)
         if not entidades_existen(): 
             enriquecer_entidades(campaña) 
     
     return {"campaña": campaña, "stats": stats, "narracion_inicio": narrar_inicio_partida()}
 
 def comprobarCampaña() -> bool: # Comprobamos si existe la campaña
-    if campaña_existe():
-        return True
-    return False
+    return campaña_existe()
 
 
 
