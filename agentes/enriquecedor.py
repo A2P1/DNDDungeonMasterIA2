@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 from config import ENRIQUECEDOR_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERATURE_ENRIQUECEDOR
 
 load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key sin depender del orden de imports
@@ -17,10 +18,6 @@ with open(ENRIQUECEDOR_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el pro
 
 system_prompt_escaped = system_prompt.replace("{", "{{").replace("}", "}}") # Escapamos las llaves para que LangChain no las confunda con variables de plantilla
 
-prompt = ChatPromptTemplate.from_messages([ # Plantilla con dos huecos: el catálogo de armas y las entidades a enriquecer
-    ("system", system_prompt_escaped),
-    ("human", "Catálogo de armas de la campaña:\n{catalogo_armas}\n\nEntidades a enriquecer:\n{entidades_raw}")
-])
 
 
 # ── Esquema estructurado de entidades enriquecidas ──────────────────────────
@@ -81,45 +78,44 @@ class EntidadesEnriquecidas(BaseModel):
 
 
 llm = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_ENRIQUECEDOR).with_structured_output(EntidadesEnriquecidas) # Temperatura baja + structured output fuerza el esquema exacto
-chain_enriquecedor = prompt | llm # Ya no hace falta parser: el runnable devuelve una instancia de EntidadesEnriquecidas validada
-
 
 def extraer_entidades_raw(campaña: dict) -> dict: # Recorre la campaña y extrae las plantillas básicas de enemigos y NPCs antes de enriquecerlas
-    enemigos_raw = []
-    npcs_raw = []
-
-    for acto in campaña.get("actos", []): # Recorremos cada acto de la campaña
-        for beat in acto.get("beats", []): # Y cada beat dentro del acto
-            if beat.get("enemigos"): # Solo procesamos los beats que tengan enemigos definidos
-                for enemigo in beat["enemigos"]: # Extraemos cada enemigo del beat con sus datos básicos
-                    enemigos_raw.append({
-                        "nombre": enemigo["nombre"],
-                        "cantidad": enemigo.get("cantidad", 1), # Cuántos hay de ese tipo en el beat
-                        "vida": enemigo.get("vida", 10),
-                        "ac": enemigo.get("ac", 10),
-                        "dado_daño": enemigo.get("dado_daño", "1d4"),
-                        "xp": enemigo.get("xp", 25),
-                        "beat_id": beat["id"], # Guardamos el beat al que pertenece para poder localizarlos después
-                        "contexto": beat.get("descripcion", "") # Le pasamos el contexto del beat para que el LLM genere fichas coherentes con la historia
-                    })
-
-    for npc in campaña.get("npcs", []): # Extraemos también los NPCs de la lista principal de la campaña
-        npcs_raw.append({
+    enemigo_bruto = []
+    npc_bruto = []
+    for actos in campaña.get("actos", []):
+        for beats in actos.get("beats", []):
+            for enemigo in beats.get("enemigos", []):
+                enemigo_bruto.append ({
+                    "nombre": enemigo["nombre"],
+                    "cantidad": enemigo.get("cantidad", 1),
+                    "vida": enemigo.get("vida", 10),
+                    "ac": enemigo.get("ac", 12),
+                    "dado_daño": enemigo.get("dado_daño", "1d8"),
+                    "xp": enemigo.get("xp", 10),
+                    "beat_id": beats.get("id", ""),
+                    "contexto": beats.get("descripcion", "")
+                })
+    
+    for npc in campaña.get("npcs", []):
+        beat_npc = _encontrar_beat_npc(campaña, npc["nombre"])
+        npc_bruto.append ({
             "nombre": npc["nombre"],
-            "rol": npc.get("rol", "neutral"), # aliado, neutral o enemigo
+            "rol": npc.get("rol", ""),
+            "sabe": npc.get("sabe", ""),
+            "quiere": npc.get("quiere", ""),
             "ubicacion": npc.get("ubicacion", ""),
-            "beat_id": _encontrar_beat_npc(campaña, npc["nombre"]) # Buscamos en qué beat aparece este NPC
+            "beat_id": beat_npc
         })
-
-    return {"enemigos_raw": enemigos_raw, "npcs_raw": npcs_raw}
+    return {"enemigos_raw": enemigo_bruto, "npcs_raw": npc_bruto}
 
 
 def _encontrar_beat_npc(campaña: dict, nombre_npc: str) -> str: # Busca en qué beat aparece un NPC comparando su nombre con el campo "npc" de cada beat
     for acto in campaña.get("actos", []):
-        for beat in acto.get("beats", []):
-            if beat.get("npc", "").lower() == nombre_npc.lower(): # Comparamos en minúsculas para evitar problemas de capitalización
-                return beat["id"]
-    return "general" # Si no aparece en ningún beat concreto, lo marcamos como general
+        for beats in acto.get("beats", []):
+            if nombre_npc.lower() == beats.get("npc", "").lower():
+                return beats.get("id", "")
+            
+    return "general"
 
 
 MAX_REINTENTOS = 2
@@ -143,40 +139,28 @@ def _armas_fuera_de_catalogo(entidades: dict, catalogo: list) -> list: # Devuelv
 
 
 def enriquecer_entidades(campaña: dict) -> dict: # Toma las plantillas básicas, las manda al LLM para completarlas y guarda el resultado en entidades.json
-    raw = extraer_entidades_raw(campaña) # Extraemos las plantillas básicas de la campaña
-    raw_json = json.dumps(raw, indent=2, ensure_ascii=False) # Las convertimos a JSON para pasárselas al LLM
-    catalogo_armas = campaña.get("armas", []) # Catálogo de armas de la campaña para validación semántica posterior
-    catalogo = json.dumps(catalogo_armas, indent=2, ensure_ascii=False) # También se lo pasamos al LLM para que asigne armas coherentes
 
-    ultimo_error: Exception | None = None
-    for intento in range(1, MAX_REINTENTOS + 1):
+    info = f"Entidades a enriquecer: {json.dumps(extraer_entidades_raw(campaña))}"
+    if campaña and campaña["armas"]:
+        info += f"Catálogo de armas de la campaña: {json.dumps(campaña['armas'], ensure_ascii=False)}"
+
+    ultimoerror = None
+    for _ in range(MAX_REINTENTOS):
         try:
-            resultado = chain_enriquecedor.invoke({"entidades_raw": raw_json, "catalogo_armas": catalogo}) # Devuelve una instancia de EntidadesEnriquecidas validada
+            entidad = llm.invoke([SystemMessage(content=system_prompt_escaped), HumanMessage(content=info)])
             break
-        except ValidationError as e: # Pydantic rechazó la respuesta (ej: atributo > 5, rol fuera de los valores válidos): reintentamos
-            ultimo_error = e
-            print(f"⚠️  Intento {intento}/{MAX_REINTENTOS} falló validación Pydantic ({e.error_count()} errores). Reintentando...")
+        except ValidationError as e:
+            ultimoerror = e
     else:
-        raise RuntimeError(
-            "El enriquecedor no consiguió generar fichas que cumplieran el esquema tras varios intentos."
-        ) from ultimo_error
-
-    entidades = resultado.model_dump(by_alias=True, exclude_none=True) # Volcamos a dict usando alias ("int" en vez de "int_") y omitiendo campos opcionales no aplicables
-
-    faltantes = _armas_fuera_de_catalogo(entidades, catalogo_armas) # Validación semántica post-hoc: aviso si el LLM asignó armas fuera del catálogo
-    if faltantes:
-        print(f"⚠️  Armas asignadas a entidades fuera del catálogo: {faltantes}. Se aceptan igualmente pero pueden ser inconsistentes.")
-
-    ENTIDADES_PATH.parent.mkdir(parents=True, exist_ok=True) # Creamos la carpeta data/ si no existe
-    with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f: # Guardamos las fichas generadas en entidades.json
+        raise RuntimeError("Error al enriquecer entidades") from ultimoerror
+    
+    entidades = entidad.model_dump(by_alias=True)
+    with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f:
         json.dump(entidades, f, indent=2, ensure_ascii=False)
-
     return entidades
-
 
 def entidades_existen() -> bool: # Comprueba si ya hay fichas generadas mirando si el archivo existe
     return ENTIDADES_PATH.exists()
-
 
 def cargar_entidades() -> dict: # Lee el entidades.json y lo devuelve como dict
     with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
