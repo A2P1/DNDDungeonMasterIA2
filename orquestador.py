@@ -1,9 +1,10 @@
 import json # Para leer y escribir los JSONs del estado de la partida
 import re # Para extraer JSON de bloques markdown que devuelve el LLM
+from typing import Optional # Para tipar el nombre_objetivo en el schema de detección
 from dotenv import load_dotenv # Para cargar la API key desde el .env
+from pydantic import BaseModel # Para el schema de detección de ataque con structured output
 from langchain_openai import ChatOpenAI # El LLM que usamos para detectar intenciones
 from langchain_core.messages import SystemMessage, HumanMessage # Tipos de mensaje para el LLM detector
-from langchain_core.output_parsers import JsonOutputParser # Para parsear las respuestas JSON del LLM
 
 from agentes.Narrador import narrador, narrador_inicio, resetear_memoria # El narrador principal de la partida
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña # Para crear y cargar la campaña
@@ -22,8 +23,14 @@ from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funcione
                 victoria_msg_inicio, victoria_msg_chunk, victoria_msg_fin, # Helpers de streaming para narración de victoria
                 derrota_msg_inicio, derrota_msg_chunk, derrota_msg_fin) # Helpers de streaming para narración de derrota
 
-_llm_detector = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA) # LLM de baja temperatura para decisiones lógicas (detectar ataques, objetivos...)
-_parser_detector = JsonOutputParser() # Parser para las respuestas JSON del LLM detector
+class DeteccionAtaque(BaseModel): # FIX-11: schema único y estricto para decidir si la acción del jugador entra a combate
+    quiere_atacar: bool # ¿El jugador expresa intención DIRECTA de atacar/herir/agredir?
+    objetivo_es_criatura: bool # ¿El objetivo es persona/criatura/animal vivo (no objeto inanimado)?
+    objetivo_claro: bool # ¿Hay UN objetivo concreto identificable en el contexto, no inventado?
+    nombre_objetivo: Optional[str] = None # Nombre exacto del objetivo si está claro (para alimentar al generador de stats)
+
+
+_llm_deteccion = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA).with_structured_output(DeteccionAtaque) # FIX-11: structured output que unifica los 2 detectores anteriores
 
 
 def iniciar (tema, personaje):
@@ -90,14 +97,16 @@ def _get_entidades_presentes() -> list: # Devuelve las entidades vivas del beat 
                 presentes.append(npc_copy)               
     return presentes 
 
-def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list: # Genera un nuevo enemigo que no ha sido generado al crear la campaña
+def _generar_enemigo_narrativo(user_input: str, resumen: str, nombre_objetivo: str = "") -> list: # Genera un nuevo enemigo que no ha sido generado al crear la campaña. FIX-11: nombre_objetivo viene del detector y aterriza la generación a una entidad concreta
     jugador_nombre = cargar_stats().get("nombre", "") if STATS_PATH.exists() else "" # Necesario para evitar que el LLM bautice al enemigo con el nombre del jugador
     llm_gen = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
-    respuesta = llm_gen.invoke([ 
+    hint_objetivo = f"El jugador apunta específicamente a '{nombre_objetivo}'. Genera SOLO esa entidad como enemigo, con stats coherentes con su descripción en el contexto. " if nombre_objetivo else ""
+    respuesta = llm_gen.invoke([
         SystemMessage(content=(
             "Eres un generador de stats de enemigos para D&D. "
             "Basándote en el contexto narrativo, genera stats para el o los enemigos "
             "que el jugador quiere atacar. "
+            f"{hint_objetivo}"
             f"IMPORTANTE: el jugador se llama '{jugador_nombre}'. NUNCA uses ese nombre para el enemigo — el enemigo es una entidad distinta del jugador. "
             "Responde SOLO con JSON válido (lista), sin texto extra:\n"
             "[\n"
@@ -159,44 +168,27 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list: # Genera 
         sistema_msg(f"[DEBUG] Excepción en _generar_enemigo_narrativo: {e}")
         return []
     
-def _detectar_intento_ataque(accion: str, resumen: str):
-    respuesta = _llm_detector.invoke([
-        SystemMessage(content=(
-            "Eres un árbitro en un juego de rol que detecta DOS COSAS:" \
-            "1. ¿El usuario quiere atacar, herir o agredir a otra entidad como una persona, animal, entidad?"
-            "2. ¿El contexto narrativo menciona alguna entidad que pueda ser atacada (NPC, enemigo, animal)?" \
-            "Responde SOLO con JSON válido, sin texto extra:\n"
-            "{\"quiere_atacar\": true/false, \"hay_objetivo_en_escena\": true/false}"
-        )),
-        HumanMessage(content=(f"Contexto narrativo actual: {resumen}, Acción del jugador: {accion}"))
-    ])
+def _detectar_ataque(accion: str, contexto: str) -> dict: # FIX-11: detección unificada. Solo activa combate si las 3 condiciones son true Y hay un objetivo nombrado
     try:
-        resultado = _parser_detector.parse(respuesta.content)
-        return bool(resultado.get("quiere_atacar", False)), bool(resultado.get("hay_objetivo_en_escena", False))
-    except Exception as e: 
-        return False # Si algo falla, se asume que no hay intento de ataque
-    
-def _hay_entidad_atacable(user_input: str, resumen: str) -> bool: # Comprueba si hay alguien presente a quien atacar según el contexto narrativo
-    respuesta = _llm_detector.invoke([ # Preguntamos al LLM si hay un objetivo razonable en la escena
-        SystemMessage(content=(
-            "Eres un árbitro de un juego de rol que, dado el resumen narrativo reciente y la acción del jugador, determina si"
-            "hay alguna entidad (persona, criatura, monstruo) presente en la escena a la que "
-            "el jugador pueda atacar razonablemente. "
-            "No cuenten objetos inanimados como árboles, puertas o paredes. "
-            "Responde SOLO con JSON válido, sin texto extra: "
-            "{\"hay_objetivo\": true} o {\"hay_objetivo\": false}"
-        )),
-        HumanMessage(content=f"Resumen narrativo reciente:\n{resumen}\n\nAcción del jugador: {user_input}")
-    ])
-    try:
-        contenido = respuesta.content
-        match = re.search(r'```(?:json)?\s*([\s\S]*?)```', contenido) 
-        if match:
-            contenido = match.group(1).strip() 
-        resultado = json.loads(contenido) 
-        return bool(resultado.get("hay_objetivo", False)) 
+        result = _llm_deteccion.invoke([
+            SystemMessage(content=(
+                "Eres un árbitro en un juego de rol. Analiza la acción del jugador y el contexto narrativo y determina con RIGOR:\n"
+                "1. quiere_atacar: ¿el jugador expresa intención DIRECTA de atacar/herir/agredir físicamente a una entidad? "
+                "Ejemplos SÍ: 'le pego', 'ataco al guardia', 'le tiro un puñetazo'. "
+                "Ejemplos NO: 'rompo la puerta' (objeto), 'examino el cofre', 'huyo', 'le hablo', 'le pregunto'.\n"
+                "2. objetivo_es_criatura: ¿el objetivo es una persona/criatura/animal vivo? "
+                "Objetos inanimados (muros, puertas, muebles, árboles, cofres) → false.\n"
+                "3. objetivo_claro: ¿hay UN objetivo CONCRETO e IDENTIFICABLE mencionado en el contexto narrativo? "
+                "Si el jugador dice 'le pego' o 'ataco' pero NADIE está mencionado en la escena cercana → false. "
+                "NO inventes objetivos: el contexto debe nombrarlos o describirlos explícitamente.\n"
+                "4. nombre_objetivo: si el objetivo está claro, copia su nombre exacto tal como aparece en el contexto (NPC, enemigo, animal). "
+                "Si no está claro, déjalo en null."
+            )),
+            HumanMessage(content=f"Contexto narrativo:\n{contexto}\n\nAcción del jugador: {accion}")
+        ])
+        return result.model_dump(exclude_none=True)
     except Exception:
-        return False 
+        return {"quiere_atacar": False, "objetivo_es_criatura": False, "objetivo_claro": False}
 
 
 
@@ -209,12 +201,12 @@ def procesar_accion(accion: str):
     if not campaña_existe(): # Si todavía no hay campaña, el único camino válido es generar la apertura
         return narrar_inicio_partida()
 
-    contexto = DIARIO_PATH.read_text(encoding='utf-8').strip() if DIARIO_PATH.exists() else "" # Contexto narrativo para los detectores: el diario sustituye al antiguo resumen.txt
-    quiere_atacar, hay_objetivo = _detectar_intento_ataque(accion, contexto)
-    if quiere_atacar and hay_objetivo:
+    contexto = DIARIO_PATH.read_text(encoding='utf-8').strip() if DIARIO_PATH.exists() else "" # Contexto narrativo para el detector: el diario sustituye al antiguo resumen.txt
+    deteccion = _detectar_ataque(accion, contexto) # FIX-11: detección unificada (quiere_atacar + objetivo_es_criatura + objetivo_claro)
+    if deteccion.get("quiere_atacar") and deteccion.get("objetivo_es_criatura") and deteccion.get("objetivo_claro"):
         entidades = _get_entidades_presentes()
-        if not entidades and _hay_entidad_atacable(accion, contexto):
-            entidades = _generar_enemigo_narrativo(accion, contexto)
+        if not entidades and deteccion.get("nombre_objetivo"): # Solo fabricamos enemigo si tenemos un nombre concreto del contexto (evita inventar enemigos de la nada)
+            entidades = _generar_enemigo_narrativo(accion, contexto, deteccion["nombre_objetivo"])
         if entidades:
             beat1 = entidades[0].get("beat_origen", "temp")
             return {"tipo": "combate_iniciado", "entidades": entidades, "texto": combate(entidades), "beat_id": beat1} # Como el tema del combate se gestiona a través de la api, aquí solo devolvemos que el combate ha iniciado
