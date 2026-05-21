@@ -96,47 +96,37 @@ def resetear_memoria() -> None: # Vacía la ventana dejando solo el SystemMessag
     del messages[1:]
 
 
+MAX_VUELTAS_REACT = 5 # FIX-07: tope de rondas del bucle de agente (ReAct) para evitar bucles infinitos
+
+
 def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
-    respuesta = llm_tools.invoke([messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:], HumanMessage(content=user_input)]) # Primera llamada al LLM (con diario + beat + ficha del jugador inyectados tras el prompt) para comprobar si la respuesta requiere el uso de tools
+    mensajes = [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:], HumanMessage(content=user_input)] # Base de contexto: prompt + diario + beat + ficha jugador + ventana + acción
+    respuesta = llm_tools.invoke(mensajes) # Primera llamada al LLM
+    for _ in range(MAX_VUELTAS_REACT): # FIX-07: ReAct loop — el LLM puede encadenar tools y razonar entre llamadas
+        if not respuesta.tool_calls: # El LLM ya no quiere más tools → su content es la narración final
+            break
+        mensajes = mensajes + [respuesta] # Añadimos la AIMessage con las tool_calls que pidió
+        for tool_call in respuesta.tool_calls: # Ejecutamos cada tool pedida en esta ronda
+            try:
+                seleccionada = mapa_herramientas[tool_call["name"]]
+                resultado = str(seleccionada.invoke(tool_call["args"]))
+            except Exception as e: # FIX-07: si el tool falla, el LLM ve el error y puede reintentar (en vez de crashear el turno)
+                resultado = f"Error ejecutando {tool_call['name']}: {e}"
+            mensajes.append(ToolMessage(content=resultado, tool_call_id=tool_call["id"]))
+        respuesta = llm_tools.invoke(mensajes) # Siguiente vuelta: el LLM razona con los resultados de las tools
 
-    if respuesta.tool_calls: # Si el LLM quiere usar herramientas, las ejecutamos todas antes de pedir la respuesta final
-        tool_messages = [] # Aquí guardamos los resultados de cada herramienta
-        for tool_call in respuesta.tool_calls: # Recorremos todas las herramientas que el LLM quiere usar
-            seleccionada = mapa_herramientas[tool_call["name"]] # Buscamos la herramienta por nombre en el mapa
-            respuesta_herramienta = seleccionada.invoke(tool_call["args"]) # La ejecutamos con los args que el LLM eligió
-            tool_messages.append(ToolMessage( # Empaquetamos el resultado como ToolMessage
-                content=str(respuesta_herramienta), # El resultado de la herramienta como texto
-                tool_call_id=tool_call["id"] # El id que vincula este resultado con la llamada original
-            ))
+    if respuesta.tool_calls: # Hemos alcanzado MAX_VUELTAS_REACT sin que el LLM cierre — forzamos narración usando llm (sin tools) para garantizar texto
+        contenido_final = _generar(llm, mensajes, on_chunk)
+    elif on_chunk: # Streaming activado: re-invocamos con stream para preservar UX (coste: 1 LLM call extra solo en streaming)
+        contenido_final = _generar(llm_tools, mensajes, on_chunk)
+    else: # Sin streaming: la última respuesta ya tiene la narración como content
+        contenido_final = respuesta.content
 
-        # Segunda llamada al LLM para generar el texto creado por las tools con el on_chunk
-        # Pasamos messages[] para que el narrador recuerde el texto generado por las tools
-        contenido_final = _generar(
-            llm_tools,
-            [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:],
-                HumanMessage(content=user_input), # Le pasamos el input del usuario
-                respuesta, # Las tools elegidas
-                *tool_messages # Los resultados generado por las tools
-            ],
-            on_chunk
-        )
-
-        # Almacenamos la información del input del usuario y el contenido final generado por las tools
-        messages.append(HumanMessage(content=user_input))
-        messages.append(AIMessage(content=contenido_final))
-        _truncar_ventana() # Mantenemos la ventana acotada; el diario (no resumen.txt) es ahora la memoria a largo plazo
-        _actualizar_diario(user_input, contenido_final) # El secretario extrae y persiste lo digno de recordar a largo plazo
-
-        return contenido_final # Devolvemos el texto de la narración final de las tools
-
-    else: # Si se confirma que el usuario no necesita tools para esta interacción, se continúa la historia
-        messages.append(HumanMessage(content=user_input)) # Almacenamos el input del usuario
-        contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:]], on_chunk) # Generamos el texto narrativo con diario + beat + ficha del jugador inyectados tras el prompt
-        messages.append(AIMessage(content=contenido)) # Almacenamos la respuesta de la IA en la ventana
-        _truncar_ventana() # Mantenemos la ventana acotada
-        _actualizar_diario(user_input, contenido) # El secretario extrae y persiste lo digno de recordar a largo plazo
-
-        return contenido # Devolvemos el contenido generado
+    messages.append(HumanMessage(content=user_input)) # Persistimos el turno en la ventana deslizante
+    messages.append(AIMessage(content=contenido_final))
+    _truncar_ventana()
+    _actualizar_diario(user_input, contenido_final) # El secretario extrae y persiste lo digno de recordar a largo plazo
+    return contenido_final
 
 
 def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], None]] = None): # Genera el inicio de la historia
