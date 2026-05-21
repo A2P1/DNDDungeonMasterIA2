@@ -101,9 +101,13 @@ MAX_VUELTAS_REACT = 5 # FIX-07: tope de rondas del bucle de agente (ReAct) para 
 
 def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
     mensajes = [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:], HumanMessage(content=user_input)] # Base de contexto: prompt + diario + beat + ficha jugador + ventana + acción
+    partes_narracion = [] # FIX-06 v3: acumulamos la prosa de CADA ronda del ReAct. Antes solo se devolvía la última y se perdía la verbalización ("Tírame una de X") de las rondas intermedias
+
     respuesta = llm_tools.invoke(mensajes) # Primera llamada al LLM
     for _ in range(MAX_VUELTAS_REACT): # FIX-07: ReAct loop — el LLM puede encadenar tools y razonar entre llamadas
-        if not respuesta.tool_calls: # El LLM ya no quiere más tools → su content es la narración final
+        if respuesta.content and respuesta.content.strip(): # Guardamos toda prosa intermedia: verbalización de tiradas, transiciones, etc.
+            partes_narracion.append(respuesta.content.strip())
+        if not respuesta.tool_calls: # El LLM ya no quiere más tools → este content es la narración final
             break
         mensajes = mensajes + [respuesta] # Añadimos la AIMessage con las tool_calls que pidió
         for tool_call in respuesta.tool_calls: # Ejecutamos cada tool pedida en esta ronda
@@ -115,12 +119,14 @@ def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Pr
             mensajes.append(ToolMessage(content=resultado, tool_call_id=tool_call["id"]))
         respuesta = llm_tools.invoke(mensajes) # Siguiente vuelta: el LLM razona con los resultados de las tools
 
-    if respuesta.tool_calls: # Hemos alcanzado MAX_VUELTAS_REACT sin que el LLM cierre — forzamos narración usando llm (sin tools) para garantizar texto
-        contenido_final = _generar(llm, mensajes, on_chunk)
-    elif on_chunk: # Streaming activado: re-invocamos con stream para preservar UX (coste: 1 LLM call extra solo en streaming)
-        contenido_final = _generar(llm_tools, mensajes, on_chunk)
-    else: # Sin streaming: la última respuesta ya tiene la narración como content
-        contenido_final = respuesta.content
+    if respuesta.tool_calls: # MAX_VUELTAS_REACT alcanzado sin cierre — forzamos narración con llm (sin tools) para garantizar texto
+        cierre = _generar(llm, mensajes, on_chunk)
+        if cierre and cierre.strip():
+            partes_narracion.append(cierre.strip())
+
+    contenido_final = "\n\n".join(partes_narracion) # Une verbalización + outcome para que el jugador vea el flujo completo del DM
+    if on_chunk and not respuesta.tool_calls: # Streaming: emitimos el texto acumulado por chunks (la última ronda no se re-invoca, ya tenemos su contenido)
+        on_chunk(contenido_final)
 
     messages.append(HumanMessage(content=user_input)) # Persistimos el turno en la ventana deslizante
     messages.append(AIMessage(content=contenido_final))
