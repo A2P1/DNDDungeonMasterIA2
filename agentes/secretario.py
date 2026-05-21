@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from config import DIARIO_PATH, MODEL_NAME, SECRETARIO_PROMPT_PATH
+from config import DIARIO_PATH, SECRETARIO_MODEL, SECRETARIO_PROMPT_PATH # FIX-15: modelo configurable por agente
 
 load_dotenv()
 
@@ -77,7 +77,7 @@ def aplicar_delta(d: Diario, delta: DeltaDiario) -> Diario: # Muta el diario con
 with open(SECRETARIO_PROMPT_PATH, 'r', encoding='utf-8') as f:
     _PROMPT = f.read().strip()
 
-_llm = ChatOpenAI(model=MODEL_NAME, temperature=0.2).with_structured_output(DeltaDiario) # Temperatura baja: queremos fidelidad, no creatividad
+_llm = ChatOpenAI(model=SECRETARIO_MODEL, temperature=0.2).with_structured_output(DeltaDiario) # Temperatura baja: queremos fidelidad, no creatividad
 
 
 def extraer_delta(accion: str, narracion: str, diario: Diario) -> DeltaDiario: # Llama al LLM para extraer el delta del turno

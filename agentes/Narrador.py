@@ -7,7 +7,7 @@ from typing import Callable, Optional # Para tipar el callback opcional de strea
 from dotenv import load_dotenv # Para cargar la API key desde el .env
 from langchain_openai import ChatOpenAI # El modelo de OpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage # Los tipos de mensaje que usamos en la conversación
-from config import NARRADOR_PROMPT_PATH, STATS_PATH, TEMPERATURE_NARRADOR # Rutas y configuración del narrador
+from config import NARRADOR_PROMPT_PATH, STATS_PATH, TEMPERATURE_NARRADOR, NARRADOR_MODEL # Rutas y configuración del narrador
 
 from agentes.secretario import cargar_diario, guardar_diario, extraer_delta, aplicar_delta # Memoria estructurada a largo plazo (sustituye a resumen.txt)
 
@@ -20,7 +20,7 @@ from tools.inventario import get_inventario, add_item_to_inventory, usar_item # 
 
 load_dotenv() # Cargamos las variables de entorno para tener la API key disponible
 
-llm = ChatOpenAI(model="gpt-4o", temperature=TEMPERATURE_NARRADOR) # El LLM del narrador con temperatura configurable
+llm = ChatOpenAI(model=NARRADOR_MODEL, temperature=TEMPERATURE_NARRADOR) # El LLM del narrador. FIX-15: modelo configurable por agente (antes hardcodeado "gpt-4o")
 
 with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt del sistema desde el archivo de texto
     system_prompt = f.read().strip() # Lo guardamos limpio, sin espacios extra

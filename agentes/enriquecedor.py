@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from config import ENRIQUECEDOR_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME, TEMPERATURE_ENRIQUECEDOR
+from config import ENRIQUECEDOR_PROMPT_PATH, ENTIDADES_PATH, ENRIQUECEDOR_MODEL, TEMPERATURE_ENRIQUECEDOR # FIX-15: modelo configurable por agente
 
 load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key sin depender del orden de imports
 
@@ -80,7 +80,7 @@ class EntidadesEnriquecidas(BaseModel):
     npcs: list[NPC]
 
 
-llm = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_ENRIQUECEDOR).with_structured_output(EntidadesEnriquecidas) # Temperatura baja + structured output fuerza el esquema exacto
+llm = ChatOpenAI(model=ENRIQUECEDOR_MODEL, temperature=TEMPERATURE_ENRIQUECEDOR).with_structured_output(EntidadesEnriquecidas) # Temperatura baja + structured output fuerza el esquema exacto
 chain_enriquecedor = prompt | llm # Ya no hace falta parser: el runnable devuelve una instancia de EntidadesEnriquecidas validada
 
 

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from config import STATS_PATH, MODEL_NAME, CREADOR_PERSONAJE_PROMPT_PATH
+from config import STATS_PATH, CREADOR_PERSONAJE_MODEL, CREADOR_PERSONAJE_PROMPT_PATH # FIX-15: modelo configurable por agente
 
 
 load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key
@@ -59,7 +59,7 @@ class PersonajeStats(BaseModel):
 # ── LLM con structured output ───────────────────────────────────────────────
 # .with_structured_output(PersonajeStats) hace que el LLM devuelva directamente
 # una instancia de PersonajeStats validada, usando function calling por debajo.
-_llm = ChatOpenAI(model=MODEL_NAME, temperature=0.3).with_structured_output(PersonajeStats)
+_llm = ChatOpenAI(model=CREADOR_PERSONAJE_MODEL, temperature=0.3).with_structured_output(PersonajeStats)
 
 with open(CREADOR_PERSONAJE_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt desde el archivo de texto
     _PROMPT = f.read().strip()

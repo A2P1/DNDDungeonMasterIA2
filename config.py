@@ -17,8 +17,19 @@ ENRIQUECEDOR_PROMPT_PATH = ROOT / "prompts" / "enriquecedor.txt"
 CREADOR_PERSONAJE_PROMPT_PATH = ROOT / "prompts" / "creador_personaje.txt"
 SECRETARIO_PROMPT_PATH = ROOT / "prompts" / "secretario.txt"
 
-# Modelo que usan todos los agentes por defecto
+# Modelo global por defecto (fallback si algún agente no especifica)
 MODEL_NAME = "gpt-4o"
+
+# Modelos por agente. Cambia uno solo sin tocar el resto. FIX-15.
+NARRADOR_MODEL = "gpt-5" # Visible al jugador, calidad alta de prosa + tool calling
+COMBATE_MODEL = "gpt-4o" # Narrador de combate: prosa visceral + reglas
+EVALUADOR_COMBATE_MODEL = "gpt-4o" # Structured output: viabilidad/DC/dado_daño
+DECISOR_NPC_MODEL = "gpt-4o" # FIX-13: decisiones de NPC con personalidad
+DETECTOR_MODEL = "gpt-4o-mini" # FIX-11: detección de ataque (lógica simple, alto volumen)
+SECRETARIO_MODEL = "gpt-4o-mini" # Extracción de diario por turno (alta frecuencia)
+DIRECTOR_MODEL = "gpt-4o" # Genera la campaña entera (una sola llamada al inicio)
+ENRIQUECEDOR_MODEL = "gpt-4o-mini" # Fichas de entidades (structured output)
+CREADOR_PERSONAJE_MODEL = "gpt-4o-mini" # Crear personaje, una sola vez
 
 # Temperaturas: alta para creatividad, baja para lógica y coherencia
 TEMPERATURE_NARRADOR = 0.7 # Equilibrio: creativo pero menos verboso/decorativo que con 0.9

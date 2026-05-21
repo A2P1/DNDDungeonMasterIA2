@@ -16,7 +16,7 @@ from tools.campana import get_siguiente_beat, marcar_beat_completado # Para nave
 from tools.inventario import add_item_to_inventory # Para añadir loot al inventario del jugador
 from tools.entidades import get_info_entidad # Para consultar el estado de una entidad concreta
 
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Rutas y configuración general
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, DETECTOR_MODEL, ENRIQUECEDOR_MODEL, TEMPERATURE_LOGICA # FIX-15: modelos por agente (detector + generador de enemigos ad-hoc)
 from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funciones batch de la UI (siguen usándose en sitios sin streaming)
                 sistema_msg, titulo_msg, prompt_jugador, prompt_input,
                 narrador_msg_inicio, narrador_msg_chunk, narrador_msg_fin, # Helpers de streaming para narración estándar
@@ -30,7 +30,7 @@ class DeteccionAtaque(BaseModel): # FIX-11: schema único y estricto para decidi
     nombre_objetivo: Optional[str] = None # Nombre exacto del objetivo si está claro (para alimentar al generador de stats)
 
 
-_llm_deteccion = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA).with_structured_output(DeteccionAtaque) # FIX-11: structured output que unifica los 2 detectores anteriores
+_llm_deteccion = ChatOpenAI(model=DETECTOR_MODEL, temperature=TEMPERATURE_LOGICA).with_structured_output(DeteccionAtaque) # FIX-11: structured output que unifica los 2 detectores anteriores. FIX-15: usa modelo mini (lógica simple)
 
 
 def iniciar (tema, personaje):
@@ -99,7 +99,7 @@ def _get_entidades_presentes() -> list: # Devuelve las entidades vivas del beat 
 
 def _generar_enemigo_narrativo(user_input: str, resumen: str, nombre_objetivo: str = "") -> list: # Genera un nuevo enemigo que no ha sido generado al crear la campaña. FIX-11: nombre_objetivo viene del detector y aterriza la generación a una entidad concreta
     jugador_nombre = cargar_stats().get("nombre", "") if STATS_PATH.exists() else "" # Necesario para evitar que el LLM bautice al enemigo con el nombre del jugador
-    llm_gen = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
+    llm_gen = ChatOpenAI(model=ENRIQUECEDOR_MODEL, temperature=0.3) # FIX-15: mismo modelo que el enriquecedor (genera stats de entidades)
     hint_objetivo = f"El jugador apunta específicamente a '{nombre_objetivo}'. Genera SOLO esa entidad como enemigo, con stats coherentes con su descripción en el contexto. " if nombre_objetivo else ""
     respuesta = llm_gen.invoke([
         SystemMessage(content=(

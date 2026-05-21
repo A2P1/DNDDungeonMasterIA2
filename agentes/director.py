@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.exceptions import OutputParserException
-from config import DIRECTOR_PROMPT_PATH, CAMPAIGN_PATH, MODEL_NAME
+from config import DIRECTOR_PROMPT_PATH, CAMPAIGN_PATH, DIRECTOR_MODEL # FIX-15: modelo configurable por agente
 
 load_dotenv() # Cargamos las variables de entorno para tener acceso a la API key sin depender del orden de imports
 
@@ -24,7 +24,7 @@ prompt = ChatPromptTemplate.from_messages([ # Plantilla del prompt con dos hueco
 
 parser = JsonOutputParser() # Convierte la respuesta del LLM directamente a un dict de Python
 
-llm = ChatOpenAI(model=MODEL_NAME, temperature=0.9) # Temperatura alta para que la campaña generada sea creativa y variada
+llm = ChatOpenAI(model=DIRECTOR_MODEL, temperature=0.9) # Temperatura alta para que la campaña generada sea creativa y variada
 chain_director = prompt | llm | parser # Chain completa: rellenamos el prompt → LLM lo procesa → parseamos el JSON
 
 

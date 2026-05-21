@@ -13,7 +13,7 @@ from tools.dados import tirar_d20, tirar_dado
 from tools.inventario import usar_item
 from tools.campana import get_siguiente_beat # Para inyectar el beat actual como contexto narrativo del combate
 from agentes.secretario import cargar_diario, guardar_diario, aplicar_delta, DeltaDiario # Para registrar el desenlace de cada combate en el diario
-from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME
+from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, COMBATE_MODEL, EVALUADOR_COMBATE_MODEL, DECISOR_NPC_MODEL # FIX-15: modelos por agente
 
 load_dotenv()
 
@@ -51,9 +51,9 @@ class AccionNPC(BaseModel): # FIX-13: decisión por turno de un NPC. El LLM elig
     motivo_fin: Optional[str] = None
 
 
-llm = ChatOpenAI(model=MODEL_NAME, temperature=0.9)
-llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3).with_structured_output(EvaluacionAccion)
-llm_decidir_npc = ChatOpenAI(model=MODEL_NAME, temperature=0.4).with_structured_output(AccionNPC) # FIX-13: temperatura media para algo de personalidad sin caos
+llm = ChatOpenAI(model=COMBATE_MODEL, temperature=0.9)
+llm_evaluar = ChatOpenAI(model=EVALUADOR_COMBATE_MODEL, temperature=0.3).with_structured_output(EvaluacionAccion)
+llm_decidir_npc = ChatOpenAI(model=DECISOR_NPC_MODEL, temperature=0.4).with_structured_output(AccionNPC) # FIX-13: temperatura media para algo de personalidad sin caos
 
 
 def _get_tipo_entidad(entidad_id: str) -> str:
