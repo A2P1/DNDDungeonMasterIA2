@@ -32,7 +32,7 @@ ENRIQUECEDOR_MODEL = "gpt-4o-mini" # Fichas de entidades (structured output)
 CREADOR_PERSONAJE_MODEL = "gpt-4o-mini" # Crear personaje, una sola vez
 
 # Temperaturas: alta para creatividad, baja para lógica y coherencia
-TEMPERATURE_NARRADOR = 0.7 # Equilibrio: creativo pero menos verboso/decorativo que con 0.9
+TEMPERATURE_NARRADOR = 0.5 # Bajado desde 0.7 al notar que GPT-5 generaba prosa demasiado densa/metafórica (sinestesias, personificaciones)
 TEMPERATURE_LOGICA = 0.0 # Cero para detectores y decisiones lógicas (sin inventarse cosas)
 TEMPERATURE_ENRIQUECEDOR = 0.3 # Media-baja para fichas coherentes pero con algo de variedad
 
