@@ -37,8 +37,23 @@ class EvaluacionAccion(BaseModel):
     usa_item: Optional[str] = None
 
 
+class AccionNPC(BaseModel): # FIX-13: decisión por turno de un NPC. El LLM elige tipo (ataque/defensa/huida/habla/usa_item/espera) según contexto
+    tipo: Literal["ataque", "defensa", "huida", "habla", "usa_item", "espera"]
+    razon: Optional[str] = None # 1 frase de por qué el NPC toma esta decisión (su lógica interna)
+    objetivo: Optional[str] = None # id del jugador (típicamente) o de otro enemigo si ataque
+    atributo: Optional[Literal["fue", "des", "con", "int", "sab", "car"]] = None # Para tiradas (ataque o huida)
+    dc: Optional[int] = Field(default=None, ge=8, le=20) # Para huida típicamente (default 10)
+    dado_daño: Optional[str] = None # Solo si tipo == "ataque"
+    arma_usada: Optional[str] = None # Solo si tipo == "ataque"
+    dialogue: Optional[str] = None # Solo si tipo == "habla": lo que dice el NPC en primera persona (EXACTO)
+    item_usado: Optional[str] = None # Solo si tipo == "usa_item"
+    termina_combate: bool = False
+    motivo_fin: Optional[str] = None
+
+
 llm = ChatOpenAI(model=MODEL_NAME, temperature=0.9)
 llm_evaluar = ChatOpenAI(model=MODEL_NAME, temperature=0.3).with_structured_output(EvaluacionAccion)
+llm_decidir_npc = ChatOpenAI(model=MODEL_NAME, temperature=0.4).with_structured_output(AccionNPC) # FIX-13: temperatura media para algo de personalidad sin caos
 
 
 def _get_tipo_entidad(entidad_id: str) -> str:
@@ -113,6 +128,42 @@ def _evaluar_accion(accion: str, contexto_combate: str) -> dict:
         return {"viable": False, "razon": "No se pudo interpretar la acción"}
 
 
+def _decidir_accion_npc(npc_info: dict, jugador: dict, accion_jugador: str) -> dict: # FIX-13: el LLM decide la acción del NPC este turno según su ficha, HP, personalidad y la última acción del jugador
+    hp_max = max(1, npc_info.get("vida_max", 1))
+    hp_pct = round(100 * npc_info.get("vida_actual", 0) / hp_max)
+    contexto = (
+        f"NPC: {npc_info.get('nombre', '?')} (id: {npc_info.get('id', '?')})\n"
+        f"Descripción: {npc_info.get('descripcion', '')}\n"
+        f"HP: {npc_info.get('vida_actual', '?')}/{npc_info.get('vida_max', '?')} ({hp_pct}%)\n"
+        f"Arma: {npc_info.get('arma') or 'sin arma específica'} (dado: {npc_info.get('dado_daño', '1d4')})\n"
+        f"Atributos: {json.dumps(npc_info.get('atributos', {}))}\n"
+        f"Jugador: {jugador.get('nombre', '?')} (HP: {jugador.get('vida_actual', '?')}/{jugador.get('vida_max', '?')})\n"
+        f"Última acción del jugador: '{accion_jugador}'"
+    )
+    try:
+        decision = llm_decidir_npc.invoke([
+            SystemMessage(content=system_prompt_combate + "\n\nMODO: DECIDIR ACCIÓN NPC"),
+            *_contexto_escena_msgs(),
+            HumanMessage(content=contexto)
+        ])
+        return decision.model_dump(exclude_none=True)
+    except Exception:
+        return {"tipo": "ataque", "razon": "decisión por defecto"}
+
+
+def _marcar_huido(entidad_id: str) -> None: # FIX-13: marca entidad como "huido" en entidades.json; get_estado_combate dejará de contarla
+    if not ENTIDADES_PATH.exists():
+        return
+    with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+        entidades = json.load(f)
+    for grupo in ("enemigos", "npcs"):
+        for e in entidades.get(grupo, []):
+            if e.get("id") == entidad_id:
+                e["estado"] = "huido"
+    with open(ENTIDADES_PATH, 'w', encoding='utf-8') as f:
+        json.dump(entidades, f, indent=2, ensure_ascii=False)
+
+
 def _get_vivos(entidades: list) -> list:
     vivos = []
     for e in entidades:
@@ -127,7 +178,7 @@ def _get_vivos(entidades: list) -> list:
     return vivos
 
 
-def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tirada: int) -> dict:
+def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tirada: int, acciones_enemigos: Optional[list] = None) -> dict:
     if resultado in ("victoria", "derrota", "resolucion"): # Al cerrar combate, registramos el hecho en el diario para que el narrador se entere en el siguiente turno
         prefijo = {"victoria": "Combate ganado", "derrota": "Jugador derrotado en combate", "resolucion": "Combate resuelto sin matar a todos"}[resultado]
         primera_frase = narracion.split('.')[0][:200] # Primera frase de la narración para dar sabor sin inflar el diario
@@ -140,7 +191,8 @@ def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tir
         "entidades_vivas": estado.get("enemigos_vivos", []),
         "combate_terminado": estado.get("combate_terminado", False),
         "resultado": resultado,
-        "tirada": tirada
+        "tirada": tirada,
+        "acciones_enemigos": acciones_enemigos or [] # FIX-13: acciones individuales de cada NPC este turno (tipo, tirada, daño, dialogue, etc.)
     }
 
 
@@ -283,58 +335,126 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
         narracion.append(_narrar("Todos los enemigos han caído. El jugador ha ganado el combate."))
         return _respuesta_turno(jugador, estado, "\n\n".join(narracion), "victoria", tiro)
 
+    acciones_enemigos = [] # FIX-13: cada NPC decide su acción este turno; registramos qué hizo cada uno para que el frontend pueda mostrarlo
     for e_resumen in estado.get("enemigos_vivos", [])[:2]:
         info = json.loads(get_info_entidad.invoke({"entidad_id": e_resumen["id"]}))
-        atributo_ataque = info.get("atributo_ataque", "fue")
-        if atributo_ataque not in ("fue", "des", "int"):
-            atributo_ataque = "fue"
-        mod_enemigo = info.get("atributos", {}).get(atributo_ataque, 0)
-        tirada_enemigo = tirar_d20.invoke({})
-        if ventaja_enemigos:
-            tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
-        critico_enemigo = (tirada_enemigo == 20)
-        pifia_enemigo = (tirada_enemigo == 1)
-        total_enemigo = tirada_enemigo + mod_enemigo
+        decision = _decidir_accion_npc(info, jugador, accion) # El LLM decide qué hace este NPC este turno (ataque/defensa/huida/habla/usa_item/espera)
+        tipo_npc = decision.get("tipo", "ataque")
+        accion_data = {"nombre": info["nombre"], "tipo": tipo_npc, "razon": decision.get("razon")}
 
-        if pifia_enemigo:
-            jugador["ventaja_proximo_turno"] = True # Simetría con el jugador: la pifia enemiga deja al jugador en posición ventajosa para su siguiente ataque
-            _guardar_jugador(jugador)
-            narracion.append(_narrar(
-                f"{info['nombre']} intenta atacar con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
-                f"NAT 1. ¡PIFIA! Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, "
-                f"a sus aliados, a objetos del lugar o a su propio cuerpo. Evita repetir el mismo tipo de complicación cada vez. "
-                f"El jugador queda en posición ventajosa para responder."
-            ))
-        elif critico_enemigo or total_enemigo >= jugador["ac"]:
-            dado = info.get("dado_daño", "1d4")
-            if critico_enemigo:
-                partes = dado.lower().split("d")
-                cantidad = int(partes[0])
-                caras = int(partes[1])
-                daño_enemigo = (cantidad * caras) + mod_enemigo
+        if tipo_npc == "ataque":
+            atributo_ataque = decision.get("atributo") or info.get("atributo_ataque", "fue")
+            if atributo_ataque not in ("fue", "des", "int"):
+                atributo_ataque = "fue"
+            mod_enemigo = info.get("atributos", {}).get(atributo_ataque, 0)
+            tirada_enemigo = tirar_d20.invoke({})
+            if ventaja_enemigos:
+                tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
+            critico_enemigo = (tirada_enemigo == 20)
+            pifia_enemigo = (tirada_enemigo == 1)
+            total_enemigo = tirada_enemigo + mod_enemigo
+            arma_npc = decision.get("arma_usada") or info.get("arma") or "la forma de ataque apropiada a su descripción"
+            accion_data.update({"tirada": tirada_enemigo, "total": total_enemigo, "arma": arma_npc})
+
+            if pifia_enemigo:
+                jugador["ventaja_proximo_turno"] = True # Simetría con el jugador: la pifia enemiga deja al jugador en posición ventajosa para su siguiente ataque
+                _guardar_jugador(jugador)
+                accion_data["resultado"] = "pifia"
+                narracion.append(_narrar(
+                    f"{info['nombre']} intenta atacar con {arma_npc}. "
+                    f"NAT 1. ¡PIFIA! Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, "
+                    f"a sus aliados, a objetos del lugar o a su propio cuerpo. Evita repetir el mismo tipo de complicación cada vez. "
+                    f"El jugador queda en posición ventajosa para responder."
+                ))
+            elif critico_enemigo or total_enemigo >= jugador["ac"]:
+                dado = decision.get("dado_daño") or info.get("dado_daño", "1d4")
+                if critico_enemigo:
+                    partes = dado.lower().split("d")
+                    cantidad = int(partes[0])
+                    caras = int(partes[1])
+                    daño_enemigo = (cantidad * caras) + mod_enemigo
+                else:
+                    daño_enemigo = tirar_dado.invoke({"dado": dado}) + mod_enemigo
+                daño_enemigo = max(1, daño_enemigo)
+                jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo)
+                _guardar_jugador(jugador)
+                accion_data["resultado"] = "critico" if critico_enemigo else "acierta"
+                accion_data["daño"] = daño_enemigo
+                narracion.append(_narrar(
+                    f"{info['nombre']} ataca al jugador con {arma_npc}. "
+                    f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
+                    f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
+                ))
             else:
-                daño_enemigo = tirar_dado.invoke({"dado": dado}) + mod_enemigo
-            daño_enemigo = max(1, daño_enemigo)
-            jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo)
-            _guardar_jugador(jugador)
+                accion_data["resultado"] = "falla"
+                narracion.append(_narrar(
+                    f"{info['nombre']} ataca al jugador con {arma_npc}. "
+                    f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
+                ))
+        elif tipo_npc == "huida":
+            atributo_huida = decision.get("atributo") or "des"
+            if atributo_huida not in ("fue", "des", "con", "int", "sab", "car"):
+                atributo_huida = "des"
+            mod_huida = info.get("atributos", {}).get(atributo_huida, 0)
+            tirada_huida = tirar_d20.invoke({})
+            total_huida = tirada_huida + mod_huida
+            dc_huida = decision.get("dc") or 10
+            accion_data.update({"tirada": tirada_huida, "total": total_huida})
+            if total_huida >= dc_huida:
+                _marcar_huido(info["id"]) # Sale del combate (get_estado_combate ya no lo cuenta como vivo)
+                accion_data["resultado"] = "huye"
+                narracion.append(_narrar(
+                    f"{info['nombre']} intenta huir del combate. Tirada {atributo_huida.upper()}: {tirada_huida}+{mod_huida}={total_huida} vs DC {dc_huida}. ÉXITO. "
+                    f"Motivo: {decision.get('razon', 'instinto de supervivencia')}. "
+                    f"Narra cómo escapa de la escena dejando atrás al jugador."
+                ))
+            else:
+                accion_data["resultado"] = "huida_fallida"
+                narracion.append(_narrar(
+                    f"{info['nombre']} intenta huir pero falla. Tirada: {tirada_huida}+{mod_huida}={total_huida} vs DC {dc_huida}. "
+                    f"Narra el intento fallido: queda en combate, jadeando o atrapado."
+                ))
+        elif tipo_npc == "habla":
+            dialogue = decision.get("dialogue", "")
+            accion_data["dialogue"] = dialogue
+            accion_data["resultado"] = "habla"
             narracion.append(_narrar(
-                f"{info['nombre']} ataca al jugador con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
-                f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
-                f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
+                f"{info['nombre']} habla en mitad del combate. Dice EXACTAMENTE: \"{dialogue}\". "
+                f"Motivo interno del NPC: {decision.get('razon', '')}. "
+                f"Narra la pausa de la acción, el tono de su voz y el efecto en la escena. NO inventes lo que dice; usa el dialogue EXACTO entre comillas."
             ))
-        else:
+        elif tipo_npc == "usa_item":
+            item_nombre = decision.get("item_usado", "un objeto")
+            accion_data["item"] = item_nombre
+            accion_data["resultado"] = "usa_item"
             narracion.append(_narrar(
-                f"{info['nombre']} ataca al jugador con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
-                f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
+                f"{info['nombre']} usa '{item_nombre}' en mitad del combate. Motivo: {decision.get('razon', '')}. "
+                f"Narra el uso del item con color (gesto, efecto visible)."
             ))
+        elif tipo_npc == "defensa":
+            accion_data["resultado"] = "defensa"
+            narracion.append(_narrar(
+                f"{info['nombre']} adopta postura defensiva. Motivo: {decision.get('razon', '')}. "
+                f"Narra cómo se cubre, se prepara o retrocede sin huir."
+            ))
+        else: # espera (también default si llega un tipo desconocido)
+            accion_data["resultado"] = "espera"
+            narracion.append(_narrar(
+                f"{info['nombre']} no ataca; espera, estudiando al jugador. Motivo: {decision.get('razon', '')}. "
+                f"Narra la tensión del momento, su postura y lo que parece estar planeando."
+            ))
+
+        acciones_enemigos.append(accion_data)
 
     if jugador["vida_actual"] <= 0:
         narracion.append(_narrar(f"{jugador['nombre']} cae derrotado. Narra su caída."))
         estado_final = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "derrota", tiro)
+        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "derrota", tiro, acciones_enemigos)
 
     estado_final = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-    return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None, tiro)
+    if estado_final.get("combate_terminado"): # FIX-13: si todos los NPCs huyeron este turno, combate resuelto sin matar a nadie
+        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "resolucion", tiro, acciones_enemigos)
+    return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None, tiro, acciones_enemigos)
 
 
 def combate(entidades_presentes: list) -> str:
