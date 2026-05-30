@@ -38,7 +38,7 @@ async function init() {
             } else if (modo === "setupCampaña") {
                 tema = valor;
                 escribirTexto("\n\nHas elegido una campaña de " + tema + ". ¡Que comience la aventura!"); // Escribimos un mensaje con el tema de la campaña que el usuario ha introducido
-                escribirTexto("\n\nIniciando partida..."); // Escribimos un mensaje de que se está iniciando la partida
+                escribirTexto("\n\nIniciando partida ..."); // Escribimos un mensaje de que se está iniciando la partida
                 let inicio = await iniciarPartida(tema, nombre);
                 limpiarNarracion(); 
                 escribirTexto("\n\n" + inicio.narracion_inicio.texto); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
@@ -59,6 +59,7 @@ async function init() {
                 }
                 if (conflicto.jugador_vida <= 0) {
                     escribirTexto("\n\n============================== GAME OVER ==============================\n");
+                    await borrar();
                 }
             }
             
@@ -69,6 +70,7 @@ async function init() {
     document.getElementById("borrar-button").addEventListener('click', async function() {
         await borrar();
         location.reload(); // Recargamos la página para empezar una nueva partida
+        limpiarNarracion();
     });
 
 
@@ -98,6 +100,3 @@ function limpiarNarracion(){
 async function borrar() {
     await borrarPartida();
 }
-
-
-

@@ -183,7 +183,7 @@ Tienes acceso a herramientas para consultar el estado de enemigos y NPCs de la c
 
 2. **IDIOMA:** Usa el idioma del usuario.
 
-3. **FORMATO:** Separa las ideas con saltos de línea para marcar los beats narrativos. No uses listas ni títulos. Sin meta-comentarios. Máximo 150 palabras. Los fragmentos cortos son válidos si tienen peso dramático.
+3. **FORMATO:** Separa las ideas con saltos de línea para marcar los beats narrativos. No uses listas ni títulos. Sin meta-comentarios. Máximo 80 palabras. Los fragmentos cortos son válidos si tienen peso dramático.
 
 4. **GANCHO FINAL:** Termina con un gancho cuando la escena lo pida (peligro, decisión, transición). En escenas rutinarias o conversacionales, deja que el momento respire — no fuerces eventos.
 

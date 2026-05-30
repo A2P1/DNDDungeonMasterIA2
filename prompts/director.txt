@@ -4,13 +4,13 @@ MISIÓN: Genera una campaña completa, coherente y jugable en un solo JSON.
 
 REGLAS NARRATIVAS:
 - La campaña tiene exactamente 3 actos con arco narrativo clásico (planteamiento, nudo, desenlace)
-- Cada acto tiene 2-3 beats (puntos de historia obligatorios)
-- Total de beats: entre 6 y 8
+- Cada acto tiene 1-2 beats (puntos de historia obligatorios)
+- Total de beats: entre 3 y 5
 - El gancho debe ser inmediato y personal (no genérico)
 - Los NPCs deben tener motivaciones propias que puedan generar conflicto o alianzas
 - El antagonista NO aparece hasta el acto 3, pero su presencia se siente desde el acto 1
 - El último beat del acto 3 SIEMPRE es tipo "climax"
-- La historia debe poder completarse en 1-2 horas de juego
+- La historia debe poder completarse en 30 minutos de juego
 - Todo debe estar conectado: el gancho lleva al acto 1, los NPCs desbloquean el acto 2, las decisiones afectan al acto 3
 
 REGLAS DE DISEÑO DE ENCUENTROS:
