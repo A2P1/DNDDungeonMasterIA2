@@ -9,13 +9,13 @@ from agentes.Narrador import narrador, narrador_inicio, resetear_memoria # El na
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña # Para crear y cargar la campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen # Para generar las fichas de enemigos y NPCs
 from agentes.combate import combate # El agente de combate
-from agentes.creador_personaje import crear_personaje, personaje_existe # Para crear la ficha del jugador
+from agentes.creador_personaje import crear_personaje, personaje_existe, crearimagenPersonaje # Para crear la ficha del jugador
 
 from tools.campana import get_siguiente_beat, marcar_beat_completado # Para navegar por los beats de la campaña
 from tools.inventario import add_item_to_inventory # Para añadir loot al inventario del jugador
 from tools.entidades import get_info_entidad # Para consultar el estado de una entidad concreta
 
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, MODEL_NAME, TEMPERATURE_LOGICA # Rutas y configuración general
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, MODEL_NAME, TEMPERATURE_LOGICA, IMAGEN_PATH # Rutas y configuración general
 from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funciones batch de la UI (siguen usándose en sitios sin streaming)
                 sistema_msg, titulo_msg, prompt_jugador, prompt_input,
                 narrador_msg_inicio, narrador_msg_chunk, narrador_msg_fin, # Helpers de streaming para narración estándar
@@ -29,13 +29,16 @@ _parser_detector = JsonOutputParser() # Parser para las respuestas JSON del LLM 
 def iniciar (tema, personaje):
     if campaña_existe():
         campaña = cargar_campaña()
+        imagen = IMAGEN_PATH
         if not personaje_existe():
-            stats = crear_personaje(personaje)
+            stats = crear_personaje(personaje, campaña)
+            imagen = crearimagenPersonaje(personaje, campaña)
         else:
             stats = cargar_stats()
     else:
         campaña = generar_campaña(tema, personaje)
         stats = crear_personaje(personaje, campaña)
+        imagen = crearimagenPersonaje(personaje, campaña)
         if not entidades_existen(): 
             enriquecer_entidades(campaña) 
     

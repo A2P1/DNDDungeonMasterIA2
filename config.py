@@ -2,12 +2,14 @@ from pathlib import Path # Para construir rutas de forma cómoda sin hardcodear 
 
 ROOT = Path(__file__).parent # La raíz del proyecto es la carpeta donde está este archivo
 
+HOME_DATA = ROOT / "data"
 # Rutas a los archivos de datos que se van generando durante la partida
 STATS_PATH = ROOT / "data" / "stats.json" # Ficha del jugador
 RESUMEN_PATH = ROOT / "data" / "resumen.txt" # Resumen narrativo acumulado de la partida
 CAMPAIGN_PATH = ROOT / "data" / "campaign.json" # La campaña generada por el director
 ENTIDADES_PATH = ROOT / "data" / "entidades.json" # Fichas de enemigos y NPCs generadas por el enriquecedor
 DIARIO_PATH = ROOT / "data" / "diario.json" # Memoria estructurada del narrador a largo plazo
+IMAGEN_PATH = ROOT / "data" / "personaje.png" # Imagen del personaje
 
 # Rutas a los prompts de cada agente (se leen al arrancar cada agente)
 NARRADOR_PROMPT_PATH = ROOT / "prompts" / "narrador.txt"
