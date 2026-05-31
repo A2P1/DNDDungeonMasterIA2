@@ -6,7 +6,7 @@ from langchain_core.messages import SystemMessage, HumanMessage # Tipos de mensa
 from langchain_core.output_parsers import JsonOutputParser # Para parsear las respuestas JSON del LLM
 
 from agentes.Narrador import narrador, narrador_inicio, resetear_memoria # El narrador principal de la partida
-from agentes.director import generar_campaña, campaña_existe, cargar_campaña # Para crear y cargar la campaña
+from agentes.director import generar_campaña, campaña_existe, cargar_campaña, crearimagenMundo # Para crear y cargar la campaña
 from agentes.enriquecedor import enriquecer_entidades, entidades_existen # Para generar las fichas de enemigos y NPCs
 from agentes.combate import combate # El agente de combate
 from agentes.creador_personaje import crear_personaje, personaje_existe, crearimagenPersonaje # Para crear la ficha del jugador
@@ -33,12 +33,14 @@ def iniciar (tema, personaje):
         if not personaje_existe():
             stats = crear_personaje(personaje, campaña)
             imagen = crearimagenPersonaje(personaje, campaña)
+            imagen1 = crearimagenMundo(tema)
         else:
             stats = cargar_stats()
     else:
         campaña = generar_campaña(tema, personaje)
         stats = crear_personaje(personaje, campaña)
         imagen = crearimagenPersonaje(personaje, campaña)
+        imagen1 = crearimagenMundo(tema)
         if not entidades_existen(): 
             enriquecer_entidades(campaña) 
     

@@ -10,6 +10,7 @@ CAMPAIGN_PATH = ROOT / "data" / "campaign.json" # La campaña generada por el di
 ENTIDADES_PATH = ROOT / "data" / "entidades.json" # Fichas de enemigos y NPCs generadas por el enriquecedor
 DIARIO_PATH = ROOT / "data" / "diario.json" # Memoria estructurada del narrador a largo plazo
 IMAGEN_PATH = ROOT / "data" / "personaje.png" # Imagen del personaje
+IMAGEN1_PATH = ROOT / "data" / "mundo.png" # Imagen del mundo
 
 # Rutas a los prompts de cada agente (se leen al arrancar cada agente)
 NARRADOR_PROMPT_PATH = ROOT / "prompts" / "narrador.txt"

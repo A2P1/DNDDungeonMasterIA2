@@ -17,12 +17,6 @@ app.add_middleware( # Configuramos CORS para permitir peticiones desde el fronte
 
 app.mount("/static", StaticFiles(directory=HOME_DATA), name="static")
 
-@app.middleware("http")
-async def no_cache_static(request, call_next):
-    response = await call_next(request)
-    if request.url.path.startswith("/static"):
-        response.headers["Cache-Control"] = "no-store"
-    return response
 # Registramos cada router con su grupo de endpoints
 app.include_router(router_principal.routerCampaña) # Crear y consultar la campaña
 app.include_router(router_principal.routerAccion)  # Procesar la accion  

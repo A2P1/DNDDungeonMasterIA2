@@ -8,6 +8,8 @@ async function init() {
     try {
             const campaña = await get_campaña(); // Obtenemos la campaña al cargar la página
             if (campaña) {
+                document.getElementById("imagen1").style.display = "block";
+                document.getElementById("imagen2").style.display = "block";
                 modo = "narrativa";
             }
     } catch (error) {
@@ -40,9 +42,13 @@ async function init() {
                 escribirTexto("\n\nHas elegido una campaña de " + tema + ". ¡Que comience la aventura!"); // Escribimos un mensaje con el tema de la campaña que el usuario ha introducido
                 escribirTexto("\n\nIniciando partida ..."); // Escribimos un mensaje de que se está iniciando la partida
                 let inicio = await iniciarPartida(tema, nombre);
+                document.getElementById("imagen1").style.display = "block";
                 document.getElementById("imagen1").src = "http://localhost:8000/static/personaje.png?t=" + Date.now();
+                document.getElementById("imagen2").style.display = "block";
+                document.getElementById("imagen2").src = "http://localhost:8000/static/mundo.png?t=" + Date.now();
+                document.body.style.backgroundImage = "url(http://localhost:8000/static/mundo.png?t=" + Date.now() + ")";
                 limpiarNarracion(); 
-                escribirTexto("\n\n" + inicio.narracion_inicio); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
+                escribirTexto("\n\n" + inicio.narracion_inicio.texto); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
                 modo = "narrativa";
             } else if (modo === "combate") {
                 escribirTexto("\n\n> " + valor); // Escribimos el comando que el usuario ha introducido en el textarea

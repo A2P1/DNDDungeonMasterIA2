@@ -9,9 +9,10 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #792222;
+            
             padding: 20px;
         }
+        
         #narration {
             width: 50%;
             height: 500px;
@@ -29,15 +30,30 @@
             font-size: 16px;
             
         }
+        .contenedor_principal {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 10px;
+        }
         .contenedor {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
+        .imagen {
+            width: 400px;
+        }
+        .texto {
+            flex: 1;
+        }
     </style>
+    <div class="contenedor_principal">
+        <img src="http://localhost:8000/static/personaje.png" id="imagen1" class="imagen" style="display:none;" alt="">
+        <textarea id="narration" rows="10" cols="50" class="texto"></textarea><br>
+        <img src="http://localhost:8000/static/mundo.png" id="imagen2" class="imagen" style="display:none;" alt="">
+    </div>
     <div class="contenedor">
-        <img src="http://localhost:8000/static/personaje.png" id="imagen1" alt="">
-        <textarea id="narration" rows="10" cols="50"></textarea><br>
         <input type="text" id="prompt-input" placeholder="Escribe tu acción...">
         <button id="borrar-button">BORRAR PARTIDA</button>
     </div>
