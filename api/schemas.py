@@ -64,13 +64,3 @@ class ObjetoInventarioRequest(BaseModel): # Body del POST /inventario/objeto par
     dado_daño: Optional[str] = None # Solo para armas (ej: "1d6")
     descripcion: Optional[str] = ""
 
-class InventarioResponse(BaseModel): # Respuesta con el inventario completo actualizado
-    inventario: list  # Lista completa de objetos del jugador
-
-class UsarItemRequest(BaseModel): # Body del POST /inventario/usar para consumir un item
-    nombre: str  # Nombre del item a usar (ej: "Poción de cura")
-
-class UsarItemResponse(BaseModel): # Respuesta tras usar un consumible
-    mensaje: str             # Texto del efecto (ej: "Usas 'Poción de cura'. Recuperas 6 HP.")
-    inventario: list         # Inventario actualizado (sin el item consumido)
-    vida_actual: Optional[int] = None  # Nueva vida del jugador si el item curó HP (None si no curó)

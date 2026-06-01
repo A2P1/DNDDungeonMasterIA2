@@ -27,6 +27,9 @@ async function get_campaña() {
     return _fetch(url + '/campaña', 'GET'); // Le pasamos la URL completa y el método de obtener
 }
 
+async function get_inventario(){
+    return _fetch(url + '/campaña/inventario', 'GET'); // Le pasamos la URL completa y el método de obtener
+}
 async function iniciarPartida(tema, personaje) {
     return _fetch(url + '/campaña/iniciar', 'POST', {tema: tema, personaje: personaje}); // Le pasamos la URL completa y el método de obtener
 }
@@ -43,4 +46,4 @@ async function accionCombate(beat_id, accion) {
     return _fetch(url + '/combate/conflicto', 'POST', {beat_id : beat_id, accion : accion}); // Le pasamos la url, el método y el par clave-valor del beat_id y la acción a realizar en el combate
 }
 
-export { get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate }; // Exportamos las funciones para usarlas en el frontend
+export { get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate, get_inventario }; // Exportamos las funciones para usarlas en el frontend

@@ -1,4 +1,4 @@
-import {get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate } from './api.js' ; // Importamos las funciones de la API para usarlas en el frontend
+import {get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate, get_inventario } from './api.js' ; // Importamos las funciones de la API para usarlas en el frontend
 
 let nombre = "";
 let tema = "";
@@ -10,7 +10,11 @@ async function init() {
             if (campaña) {
                 document.getElementById("imagen1").style.display = "block";
                 document.getElementById("imagen2").style.display = "block";
+                document.getElementById("imagen1").src = "http://localhost:8000/static/personaje.png?t=" + Date.now();
+                document.getElementById("imagen2").src = "http://localhost:8000/static/mundo.png?t=" + Date.now();
+                document.body.style.backgroundImage = "url(http://localhost:8000/static/mundo.png?t=" + Date.now() + ")";
                 modo = "narrativa";
+                actualizarInventario();
             }
     } catch (error) {
         Personaje();
@@ -32,6 +36,7 @@ async function init() {
                 } else{
                     escribirTexto("\n\n" + resultado.texto); // Escribimos la narración que nos devuelve el backend en el textarea
                 }
+                actualizarInventario();
             } else if (modo === "setupPersonaje") {
                 nombre = valor;
                 escribirTexto("\n\n¡Bienvenido, " + nombre + "!"); // Escribimos un mensaje de bienvenida con el nombre del personaje que el usuario ha introducido
@@ -47,6 +52,7 @@ async function init() {
                 document.getElementById("imagen2").style.display = "block";
                 document.getElementById("imagen2").src = "http://localhost:8000/static/mundo.png?t=" + Date.now();
                 document.body.style.backgroundImage = "url(http://localhost:8000/static/mundo.png?t=" + Date.now() + ")";
+                actualizarInventario();
                 limpiarNarracion(); 
                 escribirTexto("\n\n" + inicio.narracion_inicio.texto); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
                 modo = "narrativa";
@@ -68,6 +74,7 @@ async function init() {
                     escribirTexto("\n\n============================== GAME OVER ==============================\n");
                     await borrar();
                 }
+                actualizarInventario();
             }
             
 
@@ -93,6 +100,15 @@ function Personaje() {
     escribirTexto("Describe tu personaje (ej: Thorin, enano guerrero)\n");
 }
 
+function actualizarInventario(){
+    get_inventario().then(resultado => {
+        const inventario = resultado.inventario;
+        const inventarioTexto = inventario.length > 0 ? inventario.map(item => "- " + item.nombre + ": " + item.descripcion).join("\n") : "Inventario vacío";
+        document.getElementById("inventario").value = "\n\n INVENTARIO ACTUALIZADO \n" + inventarioTexto; // Escribimos el inventario actualizado en el textarea
+    }).catch(error => {
+        console.error("Error al obtener el inventario:", error);
+    });
+}
 function Campaña() {
     escribirTexto("\n\n CREACIÓN DE CAMPAÑA \n");
     escribirTexto("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata)\n");

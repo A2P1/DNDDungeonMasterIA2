@@ -49,8 +49,13 @@ def iniciar (tema, personaje):
 def comprobarCampaña() -> bool: # Comprobamos si existe la campaña
     return campaña_existe()
 
-
-
+def obtenerInventario():
+    if not campaña_existe():
+        return []
+    if personaje_existe():
+        stats = cargar_stats()
+        return stats.get("inventario", [])
+    return []
 def cargar_stats() -> dict: # Cargamos los datos del jugador
     with open(STATS_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)

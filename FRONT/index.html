@@ -12,7 +12,10 @@
             
             padding: 20px;
         }
-        
+        .contenedor-inventario {
+            margin-top: 20px;
+            align-items: center;
+        }
         #narration {
             width: 50%;
             height: 500px;
@@ -46,17 +49,21 @@
         }
         .texto {
             flex: 1;
+            margin-top: 10px;
         }
     </style>
     <div class="contenedor_principal">
         <img src="http://localhost:8000/static/personaje.png" id="imagen1" class="imagen" style="display:none;" alt="">
-        <textarea id="narration" rows="10" cols="50" class="texto"></textarea><br>
+        <textarea id="narration" readonly rows="10" cols="50" class="texto"></textarea><br>
         <img src="http://localhost:8000/static/mundo.png" id="imagen2" class="imagen" style="display:none;" alt="">
     </div>
     <div class="contenedor">
         <input type="text" id="prompt-input" placeholder="Escribe tu acción...">
         <button id="borrar-button">BORRAR PARTIDA</button>
+        <textarea id="inventario" readonly rows="10" cols="50" class="texto"></textarea><br>
     </div>
+        
+    
 
     <script type="module" src="script.js"></script>
 </body>
