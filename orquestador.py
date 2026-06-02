@@ -1,13 +1,15 @@
+import base64
 import json # Para leer y escribir los JSONs del estado de la partida
 import re # Para extraer JSON de bloques markdown que devuelve el LLM
 from dotenv import load_dotenv # Para cargar la API key desde el .env
 from langchain_openai import ChatOpenAI # El LLM que usamos para detectar intenciones
+from openai import OpenAI # Cliente de OpenAI para generar imágenes
 from langchain_core.messages import SystemMessage, HumanMessage # Tipos de mensaje para el LLM detector
 from langchain_core.output_parsers import JsonOutputParser # Para parsear las respuestas JSON del LLM
 
 from agentes.Narrador import narrador, narrador_inicio, resetear_memoria # El narrador principal de la partida
 from agentes.director import generar_campaña, campaña_existe, cargar_campaña, crearimagenMundo # Para crear y cargar la campaña
-from agentes.enriquecedor import enriquecer_entidades, entidades_existen # Para generar las fichas de enemigos y NPCs
+from agentes.enriquecedor import MAX_REINTENTOS, enriquecer_entidades, entidades_existen # Para generar las fichas de enemigos y NPCs
 from agentes.combate import combate # El agente de combate
 from agentes.creador_personaje import crear_personaje, personaje_existe, crearimagenPersonaje # Para crear la ficha del jugador
 
@@ -15,7 +17,7 @@ from tools.campana import get_siguiente_beat, marcar_beat_completado # Para nave
 from tools.inventario import add_item_to_inventory # Para añadir loot al inventario del jugador
 from tools.entidades import get_info_entidad # Para consultar el estado de una entidad concreta
 
-from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, MODEL_NAME, TEMPERATURE_LOGICA, IMAGEN_PATH # Rutas y configuración general
+from config import RESUMEN_PATH, CAMPAIGN_PATH, ENTIDADES_PATH, STATS_PATH, DIARIO_PATH, MODEL_NAME, TEMPERATURE_LOGICA, IMAGEN_PATH, DIARIO_PATH, IMAGEN2_PATH # Rutas y configuración general
 from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funciones batch de la UI (siguen usándose en sitios sin streaming)
                 sistema_msg, titulo_msg, prompt_jugador, prompt_input,
                 narrador_msg_inicio, narrador_msg_chunk, narrador_msg_fin, # Helpers de streaming para narración estándar
@@ -24,7 +26,7 @@ from ui import (narrador_msg, combate_msg, victoria_msg, derrota_msg, # Funcione
 
 _llm_detector = ChatOpenAI(model=MODEL_NAME, temperature=TEMPERATURE_LOGICA) # LLM de baja temperatura para decisiones lógicas (detectar ataques, objetivos...)
 _parser_detector = JsonOutputParser() # Parser para las respuestas JSON del LLM detector
-
+cliente = OpenAI() # Para generar imágenes
 
 def iniciar (tema, personaje):
     if campaña_existe():
@@ -45,6 +47,29 @@ def iniciar (tema, personaje):
             enriquecer_entidades(campaña) 
     
     return {"campaña": campaña, "stats": stats, "narracion_inicio": narrar_inicio_partida()}
+
+def crearimagenPaisaje():
+    diario = DIARIO_PATH.read_text(encoding='utf-8') if DIARIO_PATH.exists() else ""
+    resumen = RESUMEN_PATH.read_text(encoding='utf-8') if RESUMEN_PATH.exists() else ""
+    informacion = f"Diario de viaje con los eventos importantes: {diario}"
+    informacion += f"Resumen narrativo reciente: {resumen}"
+
+    ultimoError = None
+    for _ in range(MAX_REINTENTOS):
+            try:
+                imagen = cliente.images.generate(model="gpt-image-1", prompt="Eres un generador de imágenes para la creación de un paisaje. " \
+                "Tu misión es generar una imagen del paisaje en primera persona estilo pixelart que está viendo el usuario en ese momento. Para ello te vas a basar en lo que está sucediendo actualemente en la historia gracias al diario de viaje y al resumen narrativo reciente." \
+                "Aquí está toda la información: " + informacion, size="1024x1024")
+                break
+            except Exception as e:
+                ultimoError = e
+    else:
+        raise RuntimeError(f"ERROR al crear la imagen") from ultimoError
+
+    imagen_bytes = base64.b64decode(imagen.data[0].b64_json)
+    with open(IMAGEN2_PATH, 'wb') as f:
+        f.write(imagen_bytes)
+    return IMAGEN2_PATH
 
 def comprobarCampaña() -> bool: # Comprobamos si existe la campaña
     return campaña_existe()

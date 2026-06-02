@@ -11,6 +11,7 @@ ENTIDADES_PATH = ROOT / "data" / "entidades.json" # Fichas de enemigos y NPCs ge
 DIARIO_PATH = ROOT / "data" / "diario.json" # Memoria estructurada del narrador a largo plazo
 IMAGEN_PATH = ROOT / "data" / "personaje.png" # Imagen del personaje
 IMAGEN1_PATH = ROOT / "data" / "mundo.png" # Imagen del mundo
+IMAGEN2_PATH = ROOT / "data" / "puntoVista.png" # Imagen del punto de vista del jugador
 
 # Rutas a los prompts de cada agente (se leen al arrancar cada agente)
 NARRADOR_PROMPT_PATH = ROOT / "prompts" / "narrador.txt"

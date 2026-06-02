@@ -38,6 +38,10 @@ async function accionPartida(accion) {
     return _fetch(url + '/partida/accion', 'POST', {accion : accion}); // Le pasamos la url, el método y el par clave-valor de la acción a realizar en la partida
 }
 
+async function imagenLugar() {
+    return _fetch(url + '/partida/imagen/lugar', 'POST'); // Le pasamos la url, el método y el par clave-valor de la acción a realizar en la partida
+}
+
 async function borrarPartida() {
     return _fetch(url + '/campaña/', 'DELETE'); // Borramos la campaña
 }
@@ -46,4 +50,4 @@ async function accionCombate(beat_id, accion) {
     return _fetch(url + '/combate/conflicto', 'POST', {beat_id : beat_id, accion : accion}); // Le pasamos la url, el método y el par clave-valor del beat_id y la acción a realizar en el combate
 }
 
-export { get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate, get_inventario }; // Exportamos las funciones para usarlas en el frontend
+export { get_campaña, iniciarPartida, accionPartida, borrarPartida, accionCombate, get_inventario, imagenLugar }; // Exportamos las funciones para usarlas en el frontend

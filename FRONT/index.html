@@ -8,7 +8,7 @@
 <body>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial;
             
             padding: 20px;
         }
@@ -17,14 +17,26 @@
             align-items: center;
         }
         #narration {
-            width: 50%;
-            height: 500px;
+            overflow-y: auto;
+            height: 400px;
+            width: 75%;
             padding: 10px;
             border: 1px solid #ccc;
             background-color: #fff;
             font-size: 16px;
             line-height: 1.5;
-
+        }
+        #inventory {
+            overflow-y: auto;
+            height: 150px;
+            width: 50%;
+            padding: 10px;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            font-size: 16px;
+            line-height: 1.5;
+            text-align: center;
         }
         #prompt-input {
             width: 50%;
@@ -44,6 +56,11 @@
             flex-direction: column;
             align-items: center;
         }
+        .imagenlugar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
         .imagen {
             width: 400px;
         }
@@ -51,16 +68,48 @@
             flex: 1;
             margin-top: 10px;
         }
+        #borrar-button {
+            margin-top: 10px;
+            background-color: #8b0000;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        #borrar-button:hover {
+            background-color: #5c0000;
+        }
+        #imagen-lugar-button {
+            margin-top: 10px;
+            background-color: #0823be;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #imagen-lugar-button:hover {
+            background-color: #04167f;
+        }
     </style>
     <div class="contenedor_principal">
         <img src="http://localhost:8000/static/personaje.png" id="imagen1" class="imagen" style="display:none;" alt="">
-        <textarea id="narration" readonly rows="10" cols="50" class="texto"></textarea><br>
-        <img src="http://localhost:8000/static/mundo.png" id="imagen2" class="imagen" style="display:none;" alt="">
+        <div id="narration"></div>
+        <div class="imagenlugar">
+            <img id="imagen2" class="imagen" style="display:none;" alt="">
+            <button id="imagen-lugar-button">GENERAR IMAGEN DEL LUGAR</button>
+        </div>
     </div>
     <div class="contenedor">
         <input type="text" id="prompt-input" placeholder="Escribe tu acción...">
         <button id="borrar-button">BORRAR PARTIDA</button>
-        <textarea id="inventario" readonly rows="10" cols="50" class="texto"></textarea><br>
+        <div id="inventory"></div>
     </div>
         
     

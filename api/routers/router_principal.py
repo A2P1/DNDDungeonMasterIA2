@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException # APIRouter para agrupar endpoints, HTTPException para errores HTTP
 from api.schemas import IniciarResponse, IniciarRequest, AccionRequest, AccionResponse, AccionCombateRequest, EstadoCombateResponse # Schemas de validación de entrada y salida
-from orquestador import iniciar, borrar_campaña, comprobarCampaña, procesar_accion, obtenerInventario # Funciones del orquestador para iniciar y borrar la campaña
+from orquestador import crearimagenPaisaje, iniciar, borrar_campaña, comprobarCampaña, procesar_accion, obtenerInventario # Funciones del orquestador para iniciar y borrar la campaña
 from agentes.combate import procesar_turno # Función del agente de combate para procesar un turno de combate
 routerCampaña = APIRouter( # Router de campaña, todos sus endpoints empiezan por /campaña
     prefix="/campaña",
@@ -23,7 +23,12 @@ def get_campaña() -> bool:
     if not comprobarCampaña():
         raise HTTPException(status_code=404, detail="No hay ninguna campaña creada")
     return True
-
+@routerAccion.post("/imagen/lugar")
+def mostrarImagen():
+    if not comprobarCampaña():
+        raise HTTPException(status_code=404, detail="No hay ninguna campaña creada")
+    ruta_imagen = crearimagenPaisaje()
+    return {"ok": True}
 @routerCampaña.get("/inventario")
 def get_inventario():
     if not comprobarCampaña():
