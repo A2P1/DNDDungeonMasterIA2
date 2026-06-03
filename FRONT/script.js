@@ -9,8 +9,10 @@ async function init() {
     try {
             const campaña = await get_campaña(); // Obtenemos la campaña al cargar la página
             if (campaña) {
+                document.getElementById("imagenlugar").style.display = "flex";
                 document.getElementById("imagen1").style.display = "block";
                 document.getElementById("imagen2").style.display = "block";
+                
                 document.getElementById("imagen1").src = "http://localhost:8000/static/personaje.png?t=" + Date.now();
                 //document.getElementById("imagen2").src = "http://localhost:8000/static/mundo.png?t=" + Date.now();
                 document.body.style.backgroundImage = "url(http://localhost:8000/static/mundo.png?t=" + Date.now() + ")";
@@ -44,18 +46,17 @@ async function init() {
                 Campaña();
             } else if (modo === "setupCampaña") {
                 tema = valor;
-                escribirTextoIA("\n\nHas elegido una campaña de " + tema + ". ¡Que comience la aventura!"); // Escribimos un mensaje con el tema de la campaña que el usuario ha introducido
-                escribirTextoIA("\n\nIniciando partida ..."); // Escribimos un mensaje de que se está iniciando la partida
+                escribirTextoIA("\n\nHas elegido una campaña de " + tema + ". ¡Que comience la aventura!");
+                escribirTextoIA("\n\nIniciando partida ...");
                 let inicio = await iniciarPartida(tema, nombre);
+                document.getElementById("imagenlugar").style.display = "flex";
                 document.getElementById("imagen1").style.display = "block";
                 document.getElementById("imagen1").src = "http://localhost:8000/static/personaje.png?t=" + Date.now();
-                document.getElementById("imagen2").style.display = "block";
-                document.getElementById("imagen2").src = "http://localhost:8000/static/mundo.png?t=" + Date.now();
                 document.body.style.backgroundImage = "url(http://localhost:8000/static/mundo.png?t=" + Date.now() + ")";
                 actualizarInventario();
-                limpiarNarracion(); 
-                escribirTextoIA("\n\n" + inicio.narracion_inicio.texto); // Escribimos la narración de introducción a la campaña que nos devuelve el backend en el textarea
-                modo = "narrativa";
+                limpiarNarracion();
+                escribirTextoIA("\n\n" + inicio.narracion_inicio.texto);
+    modo = "narrativa";
             } else if (modo === "combate") {
                 escribirTextoUsuarioCombate("\n> " + valor); // Escribimos el comando que el usuario ha introducido en el textarea
                 let conflicto = await accionCombate(beat, valor);
@@ -110,7 +111,7 @@ function escribirTextoIA(texto) {
 document.addEventListener("DOMContentLoaded", init); // Esperamos a que el contenido de la página se haya cargado para ejecutar la función init{
 
 function Personaje() {
-    escribirTextoIA("\n CREACIÓN DE PERSONAJE \n");
+    escribirTextoIA("\n CREACIÓN DE PERSONAJE (Cuanto más detalles, mejor saldrá la ilustración del personaje) \n");
     escribirTextoIA("Describe tu personaje (ej: Thorin, enano guerrero)\n");
 }
 
@@ -125,14 +126,14 @@ function actualizarInventario(){
     });
 }
 function Campaña() {
-    escribirTextoIA("\n\n CREACIÓN DE CAMPAÑA \n");
+    escribirTextoIA("\n\n CREACIÓN DE CAMPAÑA (Cuanto mejor sea la descripción, mejor saldrá la ilustración del lugar)\n");
     escribirTextoIA("¿Qué tipo de aventura quieres? (ej: mazmorra oscura, bosque maldito, ciudad pirata)\n");
 }
 function limpiarInput() {
     document.getElementById("prompt-input").value = "";
 }
 function limpiarNarracion(){
-    document.getElementById("narration").value = "";
+    document.getElementById("narration").innerHTML = "";
 }
 
 async function borrar() {

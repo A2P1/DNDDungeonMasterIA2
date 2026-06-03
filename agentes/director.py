@@ -72,7 +72,7 @@ def crearimagenMundo(tema: str) -> dict:
             try:
                 imagen = cliente.images.generate(model="gpt-image-1", prompt="Eres un generador de imágenes para la creación de una ilustración de un mundo. " \
                 "Tu misión es generar una imagen del mundo en general con un estilo piexlart con una vista isométrica basándote en el tema escogido por el usuario. " \
-                "Aquí está toda la información: " + informacion, size="1920x1080")
+                "Aquí está toda la información: " + informacion, size="1536x1024")
                 break
             except Exception as e:
                 ultimoError = e

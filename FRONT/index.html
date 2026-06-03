@@ -9,7 +9,7 @@
     <style>
         body {
             font-family: Arial;
-            
+            background-image: url('FONDO.png');
             padding: 20px;
         }
         .contenedor-inventario {
@@ -17,14 +17,16 @@
             align-items: center;
         }
         #narration {
+            min-height: 400px;
             overflow-y: auto;
             height: 400px;
-            width: 75%;
+            width: 55%;
             padding: 10px;
             border: 1px solid #ccc;
             background-color: #fff;
             font-size: 16px;
             line-height: 1.5;
+            flex-shrink: 0;
         }
         #inventory {
             overflow-y: auto;
@@ -37,6 +39,7 @@
             font-size: 16px;
             line-height: 1.5;
             text-align: center;
+            min-height: 150px;
         }
         #prompt-input {
             width: 50%;
@@ -49,7 +52,9 @@
             display: flex;
             flex-direction: row;
             align-items: flex-start;
+            justify-content: center;
             gap: 10px;
+            min-height: 420px;
         }
         .contenedor {
             display: flex;
@@ -60,6 +65,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-width: 400px;
+            justify-content: flex-end;
         }
         .imagen {
             width: 400px;
@@ -101,7 +108,7 @@
     <div class="contenedor_principal">
         <img src="http://localhost:8000/static/personaje.png" id="imagen1" class="imagen" style="display:none;" alt="">
         <div id="narration"></div>
-        <div class="imagenlugar">
+        <div class="imagenlugar" id="imagenlugar" style="display:none">
             <img id="imagen2" class="imagen" style="display:none;" alt="">
             <button id="imagen-lugar-button">GENERAR IMAGEN DEL LUGAR</button>
         </div>
