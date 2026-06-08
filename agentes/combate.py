@@ -18,7 +18,7 @@ from config import STATS_PATH, COMBATE_PROMPT_PATH, ENTIDADES_PATH, MODEL_NAME
 load_dotenv()
 
 with open(COMBATE_PROMPT_PATH, 'r', encoding='utf-8') as f:
-    system_prompt_combate = f.read().strip()
+    prompt = f.read().strip()
 
 
 class EvaluacionAccion(BaseModel):
@@ -46,14 +46,12 @@ def _get_tipo_entidad(entidad_id: str) -> str:
     with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
         entidades = json.load(f)
     for e in entidades.get("enemigos", []):
-        if e["id"] == entidad_id:
+        if e.get("id") == entidad_id:
             return "enemigo"
     for n in entidades.get("npcs", []):
-        if n["id"] == entidad_id:
+        if n.get("id") == entidad_id:
             return "npc"
     return "enemigo"
-
-
 
 
 def _cargar_jugador() -> dict:
@@ -69,32 +67,30 @@ def _guardar_jugador(jugador: dict):
 
 
 def _contexto_escena_msgs() -> list: # Beat + diario + entidades vivas del beat como SystemMessages: el LLM de combate no debe inventar lugar, NPCs ni armas
-    msgs = []
-    raw_beat = get_siguiente_beat.invoke({})
-    beat_id = "" # Lo necesitamos para filtrar las entidades del beat actual
-    if raw_beat == "CAMPAÑA COMPLETADA":
-        msgs.append(SystemMessage(content="BEAT ACTUAL: campaña completada."))
-    else:
-        msgs.append(SystemMessage(content=f"BEAT ACTUAL (escena en la que ocurre el combate, respeta lugar y NPCs):\n{raw_beat}"))
-        try:
-            beat_id = json.loads(raw_beat).get("beat", {}).get("id", "")
-        except (json.JSONDecodeError, AttributeError):
-            pass
+    msg = []
+    siguiente_beat = get_siguiente_beat.invoke({})
+
+    if siguiente_beat == "CAMPAÑA COMPLETA":
+        msg.append(SystemMessage(content=f"La campaña está completa."))
+        return msg
+    beat_id = json.loads(siguiente_beat).get("siguiente_beat", {}).get("id")
     diario = cargar_diario()
-    msgs.append(SystemMessage(content=f"DIARIO (memoria de la partida, NO contradigas lo establecido):\n{diario.model_dump_json(indent=2, exclude_none=True)}"))
-    if ENTIDADES_PATH.exists(): # Entidades vivas (enemigos del beat actual + NPCs activos): arma, descripción y atributos para que la narración no las invente
-        with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
-            entidades = json.load(f)
-        relevantes = [e for e in entidades.get("enemigos", []) if e.get("beat_origen") == beat_id and e.get("estado") == "vivo"]
-        relevantes += [n for n in entidades.get("npcs", []) if n.get("estado") == "vivo"]
-        if relevantes:
-            msgs.append(SystemMessage(content=f"ENTIDADES PRESENTES (respeta nombre, arma y descripción al narrar):\n{json.dumps(relevantes, indent=2, ensure_ascii=False)}"))
-    return msgs
+    msg.append(SystemMessage(content=f"Diario de los hechos importantes del jugador hasta ahora:\n{json.dumps(diario.model_dump(), ensure_ascii=False)}"))
+    with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f:
+        entidades = json.load(f)
+    for e in entidades.get("enemigos", []):
+        if e.get("beat_origen") == beat_id and e.get("estado") == "vivo":
+            msg.append(SystemMessage(content=f"Enemigo presente en el combate: {e['nombre']}. Descripción: {e.get('descripcion', '')}. Arma: {e.get('arma', 'desconocida')}."))
+    for n in entidades.get("npcs", []):
+        if n.get("beat_origen") == beat_id and n.get("estado") == "vivo":
+            msg.append(SystemMessage(content=f"NPC presente en el combate: {n['nombre']}. Descripción: {n.get('descripcion', '')}. Arma: {n.get('arma', 'desconocida')}."))
+    return msg
+
 
 
 def _narrar(contexto: str) -> str:
     msgs = [
-        SystemMessage(content=system_prompt_combate + "\n\nMODO: NARRAR"),
+        SystemMessage(content=prompt + "\n\nMODO: NARRAR"),
         *_contexto_escena_msgs(), # Inyectamos beat + diario para que el combate no invente ubicación ni mezcle el nombre del jugador con NPCs
         HumanMessage(content=contexto)
     ]
@@ -104,26 +100,12 @@ def _narrar(contexto: str) -> str:
 def _evaluar_accion(accion: str, contexto_combate: str) -> dict:
     try:
         evaluacion = llm_evaluar.invoke([
-            SystemMessage(content=system_prompt_combate + "\n\nMODO: EVALUAR ACCIÓN"),
+            SystemMessage(content=prompt + "\n\nMODO: EVALUAR ACCIÓN"),
             HumanMessage(content=f"Contexto del combate:\n{contexto_combate}\n\nAcción del jugador: {accion}")
         ])
         return evaluacion.model_dump(exclude_none=True)
     except Exception:
         return {"viable": False, "razon": "No se pudo interpretar la acción"}
-
-
-def _get_vivos(entidades: list) -> list:
-    vivos = []
-    for e in entidades:
-        info_raw = get_info_entidad.invoke({"entidad_id": e["id"]})
-        try:
-            info = json.loads(info_raw)
-            if info.get("estado") == "vivo":
-                info["tipo_entidad"] = e.get("tipo_entidad", "enemigo")
-                vivos.append(info)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return vivos
 
 
 def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tirada: int) -> dict:
@@ -145,31 +127,23 @@ def _respuesta_turno(jugador: dict, estado: dict, narracion: str, resultado, tir
 
 def procesar_turno(beat_id: str, accion: str) -> dict:
     jugador = _cargar_jugador()
-    narracion = []
-    tiro = None
+    estado_combate = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
+    entidades_vivas = estado_combate.get("enemigos_vivos", [])
+    narracion = [] 
 
-    estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-    enemigos_vivos = estado.get("enemigos_vivos", [])
-
-    if not enemigos_vivos:
-        return _respuesta_turno(jugador, estado, "No quedan enemigos.", "victoria", tiro)
-
-    armas_inv = get_armas(jugador)
-    if armas_inv:
-        verificacion = verificar_arma_en_accion(accion, armas_inv)
-        if verificacion["estado"] == "no_en_inventario":
-            nombres_armas = ", ".join(a["nombre"] for a in armas_inv)
-            texto = _narrar(
-                f"El jugador intenta usar '{verificacion['nombre']}' pero no lo tiene. "
-                f"Sus armas son: {nombres_armas}. Narra que no tiene esa arma."
-            )
-            return _respuesta_turno(jugador, estado, texto, None, tiro)
-        elif verificacion["estado"] == "encontrada":
-            jugador["arma"] = verificacion["arma"]
-            _guardar_jugador(jugador)
-
+    if not entidades_vivas:
+        return _respuesta_turno(jugador, estado_combate, "No hay enemigos vivos. El combate ha terminado.", "victoria", None)
+    
+    armas_disponibles = get_armas(jugador)
+    accion_con_arma = verificar_arma_en_accion(accion, armas_disponibles)
+    if accion_con_arma["estado"] == "no_en_inventario":
+        narracion.append(f"Mencionas usar '{accion_con_arma['nombre']}', pero no lo tienes en tu inventario. No puedes usarlo.")
+    elif accion_con_arma["estado"] == "encontrada":
+        jugador["arma"] = accion_con_arma["arma"] 
+        _guardar_jugador(jugador)
     arma_actual = jugador.get("arma", {})
-    consumibles = [i for i in jugador.get("inventario", []) if i.get("tipo") == "consumible"]
+    consumibles = [item for item in jugador.get("inventario", []) if item.get("tipo") == "consumible"]
+    enemigos_vivos = entidades_vivas
     contexto = (
         f"Jugador: {jugador['nombre']} ({jugador.get('clase', '?')}), "
         f"Arma: {arma_actual.get('nombre', 'sus puños')} (dado: {arma_actual.get('dado_daño', '1d6')}), "
@@ -180,161 +154,51 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     evaluacion = _evaluar_accion(accion, contexto)
 
     if not evaluacion.get("viable", False):
-        razon = evaluacion.get("razon", "Eso no es posible aquí.")
-        texto = _narrar(f"El jugador intenta: '{accion}'. No es viable: {razon}")
-        return _respuesta_turno(jugador, estado, texto, None, tiro)
+        narracion.append(_narrar(f"La acción no es viable: {evaluacion.get('razon', 'sin razón específica')}. Intenta otra cosa."))
+        return _respuesta_turno(jugador, estado_combate, "\n\n".join(narracion), None, None)
+    objetivo_id = evaluacion.get("objetivo") or entidades_vivas[0]["id"]
+    enemigo_objetivo = json.loads(get_info_entidad.invoke({"entidad_id": objetivo_id}))
+    Armadura = enemigo_objetivo.get("ac", 10)
+    
+    # TURNO JUGADOR:
 
-    tipo = evaluacion.get("tipo", "accion")
-    atributo = evaluacion.get("atributo", "fue")
-    dc = evaluacion.get("dc", 12)
-    mod = jugador.get("atributos", {}).get(atributo, 0)
+    tirada = tirar_d20.invoke({})
+    if tirada + jugador.get("atributos", {}).get(evaluacion.get("atributo", ""), 0) >= Armadura:
+        daño = tirar_dado.invoke({ "dado": evaluacion.get("dado_daño", "1d6") })
 
-    # Para ataques, sobreescribimos dc con la AC real del objetivo (más fiable que confiar en el LLM)
-    if evaluacion.get("tipo") == "ataque":
-        objetivo_id_para_ac = evaluacion.get("objetivo") or (enemigos_vivos[0]["id"] if enemigos_vivos else None)
-        if objetivo_id_para_ac:
-            try:
-                info_obj = json.loads(get_info_entidad.invoke({"entidad_id": objetivo_id_para_ac}))
-                dc = info_obj.get("ac", dc) # si no hay ac válido, mantenemos el dc del LLM
-            except (json.JSONDecodeError, TypeError):
-                pass # si la consulta falla, mantenemos el dc del LLM como red de seguridad
-
-    ventaja_enemigos = False
-
-    item_name = evaluacion.get("usa_item")
-    if item_name:
-        resultado_item = usar_item.invoke({"nombre_item": item_name})
-        jugador = _cargar_jugador()
-        narracion.append(_narrar(
-            f"El jugador usa '{item_name}'. Resultado: {resultado_item}. Narra el uso del item con color."
-        ))
+        entidad = _get_tipo_entidad(objetivo_id)
+        if entidad == "enemigo":
+            resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
+            narracion.append(resultado_daño["mensaje"])
+        elif entidad == "npc":
+            resultado_daño = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
+            narracion.append(resultado_daño["mensaje"])
     else:
-        tirada = tirar_d20.invoke({})
-        if jugador.get("ventaja_proximo_turno"): # Si en el turno anterior un enemigo pifió, el jugador ataca con ventaja: tira 2d20 y se queda con la mejor
-            tirada = max(tirada, tirar_d20.invoke({}))
-            jugador["ventaja_proximo_turno"] = False # Consumimos el flag para que solo aplique a este ataque
-            _guardar_jugador(jugador)
-        critico = (tirada == 20 and tipo == "ataque")
-        pifia = (tirada == 1)
-        total = tirada + mod
-        tiro = tirada
-        if pifia:
-            ventaja_enemigos = True
-            narracion.append(_narrar(
-                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"NAT 1. ¡PIFIA! El ataque falla estrepitosamente y el jugador queda expuesto. "
-                f"Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, a los enemigos cercanos, "
-                f"a objetos del lugar o cualquier cosa que tenga sentido en la escena. Evita repetir el mismo tipo de complicación cada vez."
-            ))
-        elif critico or total >= dc:
-            if evaluacion.get("termina_combate"):
-                motivo = evaluacion.get("motivo_fin", "el combate termina por una resolución narrativa")
-                texto = _narrar(
-                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. "
-                    f"El combate termina: {motivo}. Narra el desenlace con tensión."
-                )
-                return _respuesta_turno(jugador, estado, texto, "resolucion", tiro)
-
-            dado_daño = evaluacion.get("dado_daño")
-            if dado_daño:
-                if critico:
-                    partes = dado_daño.lower().split("d")
-                    cantidad = int(partes[0])
-                    caras = int(partes[1])
-                    daño = (cantidad * caras) + mod
-                else:
-                    daño = tirar_dado.invoke({"dado": dado_daño}) + mod
-                daño = max(1, daño)
-
-                objetivo_id = evaluacion.get("objetivo")
-                if not objetivo_id and enemigos_vivos:
-                    objetivo_id = enemigos_vivos[0]["id"]
-                if objetivo_id:
-                    tipo_entidad = _get_tipo_entidad(objetivo_id)
-                    if tipo_entidad == "npc":
-                        resultado = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
-                    else:
-                        resultado = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
-                    msg_daño = resultado["mensaje"]
-                else:
-                    msg_daño = "No hay objetivo al que aplicar el daño."
-
-                narracion.append(_narrar(
-                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. "
-                    f"{'¡CRÍTICO! ' if critico else ''}ÉXITO. Daño: {daño}. {msg_daño}"
-                ))
-            else:
-                efecto = evaluacion.get("efecto_exito", "")
-                narracion.append(_narrar(
-                    f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                    f"{tirada}+{mod}={total} vs DC {dc}. ÉXITO. Efecto: {efecto}"
-                ))
-        else:
-            efecto = evaluacion.get("efecto_fallo", "")
-            narracion.append(_narrar(
-                f"Jugador: '{accion}'. Check de {atributo.upper()}: "
-                f"{tirada}+{mod}={total} vs DC {dc}. FALLO. Efecto: {efecto}"
-            ))
-
-    estado = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-    if estado["combate_terminado"]:
-        narracion.append(_narrar("Todos los enemigos han caído. El jugador ha ganado el combate."))
-        return _respuesta_turno(jugador, estado, "\n\n".join(narracion), "victoria", tiro)
-
-    for e_resumen in estado.get("enemigos_vivos", [])[:2]:
-        info = json.loads(get_info_entidad.invoke({"entidad_id": e_resumen["id"]}))
-        atributo_ataque = info.get("atributo_ataque", "fue")
-        if atributo_ataque not in ("fue", "des", "int"):
-            atributo_ataque = "fue"
-        mod_enemigo = info.get("atributos", {}).get(atributo_ataque, 0)
+        narracion.append(_narrar(f"Fallas el ataque contra {enemigo_objetivo['nombre']}."))
+    estado_combate = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
+    entidades_vivas = estado_combate.get("enemigos_vivos", [])
+    if not entidades_vivas:
+        return _respuesta_turno(jugador, estado_combate, "No hay enemigos vivos. El combate ha terminado.", "victoria", tirada)
+    
+    # TURNO ENEMIGOS
+    #Por cada enemigo vivo (máximo 2)
+    for enemigo in entidades_vivas[:2]:
         tirada_enemigo = tirar_d20.invoke({})
-        if ventaja_enemigos:
-            tirada_enemigo = max(tirada_enemigo, tirar_d20.invoke({}))
-        critico_enemigo = (tirada_enemigo == 20)
-        pifia_enemigo = (tirada_enemigo == 1)
-        total_enemigo = tirada_enemigo + mod_enemigo
-
-        if pifia_enemigo:
-            jugador["ventaja_proximo_turno"] = True # Simetría con el jugador: la pifia enemiga deja al jugador en posición ventajosa para su siguiente ataque
-            _guardar_jugador(jugador)
-            narracion.append(_narrar(
-                f"{info['nombre']} intenta atacar con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
-                f"NAT 1. ¡PIFIA! Narra una complicación dramática y memorable, siendo creativo: puede involucrar al entorno, "
-                f"a sus aliados, a objetos del lugar o a su propio cuerpo. Evita repetir el mismo tipo de complicación cada vez. "
-                f"El jugador queda en posición ventajosa para responder."
-            ))
-        elif critico_enemigo or total_enemigo >= jugador["ac"]:
-            dado = info.get("dado_daño", "1d4")
-            if critico_enemigo:
-                partes = dado.lower().split("d")
-                cantidad = int(partes[0])
-                caras = int(partes[1])
-                daño_enemigo = (cantidad * caras) + mod_enemigo
-            else:
-                daño_enemigo = tirar_dado.invoke({"dado": dado}) + mod_enemigo
-            daño_enemigo = max(1, daño_enemigo)
+        info_enemigo = json.loads(get_info_entidad.invoke({"entidad_id": enemigo["id"]}))
+        if tirada_enemigo + info_enemigo.get("atributos", {}).get("fue", 0) >= jugador.get("ac", 10):
+            daño_enemigo = tirar_dado.invoke({ "dado": info_enemigo.get("dado_daño", "1d6") })
             jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo)
+            narracion.append(_narrar(f"{info_enemigo['nombre']} ataca y te inflige {daño_enemigo} de daño. Vida restante: {jugador['vida_actual']}/{jugador['vida_max']}."))
             _guardar_jugador(jugador)
-            narracion.append(_narrar(
-                f"{info['nombre']} ataca al jugador con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
-                f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). "
-                f"{'¡CRÍTICO! ' if critico_enemigo else ''}ACIERTA. Daño: {daño_enemigo}. Vida jugador: {jugador['vida_actual']}/{jugador['vida_max']}"
-            ))
         else:
-            narracion.append(_narrar(
-                f"{info['nombre']} ataca al jugador con {info.get('arma') or 'la forma de ataque apropiada a su descripción'}. "
-                f"Tirada: {tirada_enemigo}+{mod_enemigo}={total_enemigo} vs AC {jugador['ac']} ({atributo_ataque.upper()}). FALLA."
-            ))
-
+            narracion.append(_narrar(f"{info_enemigo['nombre']} ataca pero falla."))
     if jugador["vida_actual"] <= 0:
         narracion.append(_narrar(f"{jugador['nombre']} cae derrotado. Narra su caída."))
         estado_final = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "derrota", tiro)
+        return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), "derrota", tirada_enemigo)
 
     estado_final = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
-    return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None, tiro)
+    return _respuesta_turno(jugador, estado_final, "\n\n".join(narracion), None, tirada)
 
 
 def combate(entidades_presentes: list) -> str:

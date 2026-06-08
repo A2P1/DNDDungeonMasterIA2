@@ -62,10 +62,14 @@ def get_estado_combate(beat_id: str) -> str:
     with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f: # Leemos todas las entidades
         entidades = json.load(f)
 
-    enemigos_beat = [ # Filtramos todos los enemigos de ese beat, vivos o muertos
-        e for e in entidades.get("enemigos", []) + entidades.get("npcs", [])
-        if e["beat_origen"] == beat_id
+    enemigos = [ # Filtramos todos los enemigos de ese beat, vivos o muertos
+        e for e in entidades.get("enemigos", [])
+        if e["beat_origen"] == beat_id]
+    npcs = [
+        n for n in entidades.get("npcs", [])
+        if n["beat_origen"] == beat_id and n.get("rol") != "aliado"
     ]
+    enemigos_beat = enemigos + npcs # Combinamos enemigos y NPCs hostiles para el resumen del combate
 
     beat_sin_enemigos = {
         "beat_id": beat_id,
