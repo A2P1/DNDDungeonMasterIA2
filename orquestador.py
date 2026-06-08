@@ -166,11 +166,12 @@ def _generar_enemigo_narrativo(user_input: str, resumen: str) -> list: # Genera 
         with open(ENTIDADES_PATH, 'r', encoding='utf-8') as f: 
             entidades = json.load(f)
 
-        ids_existentes = {e["id"] for e in entidades.get("enemigos", [])} 
-        nuevos = [] 
+        ids_existentes = {e["id"] for e in entidades.get("enemigos", [])}
+        nombres_aliados = {n.get("nombre", "").lower() for n in entidades.get("npcs", []) if n.get("rol") == "aliado"}
+        nuevos = []
 
         for e in enemigos: # Guardamos el id del enemigo en una lista de nuevos enemigos
-            if e.get("id") and e["id"] not in ids_existentes:
+            if e.get("id") and e["id"] not in ids_existentes and e.get("nombre", "").lower() not in nombres_aliados:
                 entidades["enemigos"].append(e)
                 e_con_tipo = dict(e) 
                 e_con_tipo["tipo_entidad"] = "enemigo"

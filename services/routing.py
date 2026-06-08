@@ -135,10 +135,11 @@ def generar_enemigo_narrativo(user_input: str, resumen: str) -> list: # Genera u
             entidades = json.load(f)
 
         ids_existentes = {e["id"] for e in entidades.get("enemigos", [])} # Set de ids ya registrados para evitar duplicados
+        nombres_aliados = {n.get("nombre", "").lower() for n in entidades.get("npcs", []) if n.get("rol") == "aliado"}
         nuevos = [] # Aquí acumulamos los enemigos que sí vamos a insertar
 
         for e in enemigos: # Recorremos los enemigos generados por el LLM
-            if e.get("id") and e["id"] not in ids_existentes: # Solo insertamos si tiene id y no es duplicado
+            if e.get("id") and e["id"] not in ids_existentes and e.get("nombre", "").lower() not in nombres_aliados: # Solo insertamos si tiene id, no es duplicado y no es un aliado
                 entidades["enemigos"].append(e) # Lo añadimos al archivo de entidades
                 e_con_tipo = dict(e) # Copia para añadir tipo_entidad sin tocar el original
                 e_con_tipo["tipo_entidad"] = "enemigo" # Marcamos como enemigo para el sistema de combate
