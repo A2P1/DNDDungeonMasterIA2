@@ -162,19 +162,30 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     
     # TURNO JUGADOR:
 
-    tirada = tirar_d20.invoke({})
-    if tirada + jugador.get("atributos", {}).get(evaluacion.get("atributo", ""), 0) >= Armadura:
-        daño = tirar_dado.invoke({ "dado": evaluacion.get("dado_daño", "1d6") })
-
-        entidad = _get_tipo_entidad(objetivo_id)
-        if entidad == "enemigo":
-            resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
-            narracion.append(resultado_daño["mensaje"])
-        elif entidad == "npc":
-            resultado_daño = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
-            narracion.append(resultado_daño["mensaje"])
+    item_name = evaluacion.get("usa_item")
+    if item_name:
+        resultado_item = usar_item.invoke({"nombre_item": item_name})
+        jugador = _cargar_jugador()
+        narracion.append(_narrar(f"El jugador usa '{item_name}'. Resultado: {resultado_item}. Narra el uso con color."))
     else:
-        narracion.append(_narrar(f"Fallas el ataque contra {enemigo_objetivo['nombre']}."))
+        tirada = tirar_d20.invoke({})
+        if jugador.pop("ventaja_proximo_turno", False):
+            tirada = max(tirada, tirar_d20.invoke({}))
+            _guardar_jugador(jugador)
+        mod = jugador.get("atributos", {}).get(evaluacion.get("atributo", ""), 0) # Modificador de daño basado en los atributos
+        pifia, critico = tirada == 1, tirada == 20 # Pifia si saca un 1/20, crítico si saca un 20/20
+        if not pifia and (critico or tirada + mod >= Armadura): # Si no saca pifia y acierta, entra
+            daño = tirar_dado.invoke({"dado": evaluacion.get("dado_daño", "1d6")}) * (2 if critico else 1)
+            entidad = _get_tipo_entidad(objetivo_id)
+            if entidad == "enemigo":
+                resultado_daño = json.loads(dañar_enemigo.invoke({"enemigo_id": objetivo_id, "daño": daño}))
+            elif entidad == "npc":
+                resultado_daño = json.loads(dañar_npc.invoke({"npc_id": objetivo_id, "daño": daño}))
+            narracion.append(_narrar(f"Jugador: '{accion}'. {'¡CRÍTICO! ' if critico else ''}Daño: {daño}. {resultado_daño['mensaje']}"))
+        elif pifia: # Si es pifia (1/20) se narra la pifia
+            narracion.append(_narrar("¡PIFIA! Narra un fallo dramático y caótico."))
+        else: # Si falla el ataque, se narra la fallada
+            narracion.append(_narrar(f"Fallas el ataque contra {enemigo_objetivo['nombre']}."))
     estado_combate = json.loads(get_estado_combate.invoke({"beat_id": beat_id}))
     entidades_vivas = estado_combate.get("enemigos_vivos", [])
     if not entidades_vivas:
@@ -183,13 +194,18 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     # TURNO ENEMIGOS
     #Por cada enemigo vivo (máximo 2)
     for enemigo in entidades_vivas[:2]:
-        tirada_enemigo = tirar_d20.invoke({})
+        tirada_enemigo = max(tirar_d20.invoke({}), tirar_d20.invoke({})) if pifia else tirar_d20.invoke({})
         info_enemigo = json.loads(get_info_entidad.invoke({"entidad_id": enemigo["id"]}))
-        if tirada_enemigo + info_enemigo.get("atributos", {}).get("fue", 0) >= jugador.get("ac", 10):
+        mod_enemigo = info_enemigo.get("atributos", {}).get("fue", 0)
+        if tirada_enemigo + mod_enemigo >= jugador.get("ac", 10):
             daño_enemigo = tirar_dado.invoke({ "dado": info_enemigo.get("dado_daño", "1d6") })
             jugador["vida_actual"] = max(0, jugador["vida_actual"] - daño_enemigo)
             narracion.append(_narrar(f"{info_enemigo['nombre']} ataca y te inflige {daño_enemigo} de daño. Vida restante: {jugador['vida_actual']}/{jugador['vida_max']}."))
             _guardar_jugador(jugador)
+        elif tirada_enemigo == 1: # Si la tirada del enemigo es pifia (1), se el otorga ventaja al jugador, que tirará con un valor máximo el próximo dado de 20 caras
+            jugador["ventaja_proximo_turno"] = True
+            _guardar_jugador(jugador)
+            narracion.append(_narrar(f"¡PIFIA! {info_enemigo['nombre']} falla caóticamente. Narra una complicación memorable."))
         else:
             narracion.append(_narrar(f"{info_enemigo['nombre']} ataca pero falla."))
     if jugador["vida_actual"] <= 0:
