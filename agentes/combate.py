@@ -162,6 +162,7 @@ def procesar_turno(beat_id: str, accion: str) -> dict:
     
     # TURNO JUGADOR:
 
+    pifia = False
     item_name = evaluacion.get("usa_item")
     if item_name:
         resultado_item = usar_item.invoke({"nombre_item": item_name})

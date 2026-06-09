@@ -74,8 +74,8 @@ def _stats_msg() -> SystemMessage: # Ficha completa del jugador. Crítico: sin e
     return SystemMessage(content=f"JUGADOR (ficha completa, nombre/clase/HP/atributos/inventario):\n{json.dumps(stats, indent=2, ensure_ascii=False)}")
 
 
-def _truncar_ventana() -> None: # Mantiene messages[0] (prompt fijo) + últimos WINDOW_MESSAGES pares Human/AI, descarta el resto
-    if len(messages) > 1 + WINDOW_MESSAGES:
+def _truncar_ventana() -> None: # Mantiene un máximo de 20 mensajes para no almacenar demasiada memoria
+    if len(messages) > 1 + WINDOW_MESSAGES: # Si supera la cantidad, elimina los mensajes antiguos
         del messages[1:-WINDOW_MESSAGES]
 
 
