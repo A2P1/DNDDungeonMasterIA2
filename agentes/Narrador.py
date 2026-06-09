@@ -25,21 +25,14 @@ llm = ChatOpenAI(model="gpt-4o", temperature=TEMPERATURE_NARRADOR) # El LLM del 
 with open(NARRADOR_PROMPT_PATH, 'r', encoding='utf-8') as f: # Leemos el prompt del sistema desde el archivo de texto
     system_prompt = f.read().strip() # Lo guardamos limpio, sin espacios extra
 
-llm_tools = llm.bind_tools([ # Versión del LLM que sabe usar las herramientas disponibles
-    get_status, mostrar_resumen, tirar_d20, tirar_dado,
-    get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
-    get_enemigos_beat, get_estado_combate, get_info_entidad, get_inventario,
-    add_item_to_inventory, usar_item
-])
-
-Herramientas = [ # Lista de todas las herramientas disponibles para el narrador
+_tools = [
     get_status, mostrar_resumen, tirar_d20, tirar_dado,
     get_progreso_campana, get_siguiente_beat, marcar_beat_completado, get_info_npc,
     get_enemigos_beat, get_estado_combate, get_info_entidad, get_inventario,
     add_item_to_inventory, usar_item
 ]
-
-mapa_herramientas = {t.name: t for t in Herramientas} # Diccionario nombre → herramienta para llamarlas por nombre fácilmente
+llm_tools = llm.bind_tools(_tools)
+mapa_herramientas = {t.name: t for t in _tools}
 
 messages = [ # Ventana deslizante: messages[0] = prompt, el resto son los últimos pares Human/AI. El diario se inyecta en cada llamada pero no se acumula aquí.
     SystemMessage(content=system_prompt)
@@ -96,47 +89,24 @@ def resetear_memoria() -> None: # Vacía la ventana dejando solo el SystemMessag
     del messages[1:]
 
 
-def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None): # Procesa la acción del jugador y devuelve la narración. Si se pasa on_chunk, streamea
-    respuesta = llm_tools.invoke([messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:], HumanMessage(content=user_input)]) # Primera llamada al LLM (con diario + beat + ficha del jugador inyectados tras el prompt) para comprobar si la respuesta requiere el uso de tools
+def narrador(user_input, on_chunk: Optional[Callable[[str], None]] = None):
+    messages.append(HumanMessage(content=user_input))
+    ctx = [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:]]
+    respuesta = llm_tools.invoke(ctx)
 
-    if respuesta.tool_calls: # Si el LLM quiere usar herramientas, las ejecutamos todas antes de pedir la respuesta final
-        tool_messages = [] # Aquí guardamos los resultados de cada herramienta
-        for tool_call in respuesta.tool_calls: # Recorremos todas las herramientas que el LLM quiere usar
-            seleccionada = mapa_herramientas[tool_call["name"]] # Buscamos la herramienta por nombre en el mapa
-            respuesta_herramienta = seleccionada.invoke(tool_call["args"]) # La ejecutamos con los args que el LLM eligió
-            tool_messages.append(ToolMessage( # Empaquetamos el resultado como ToolMessage
-                content=str(respuesta_herramienta), # El resultado de la herramienta como texto
-                tool_call_id=tool_call["id"] # El id que vincula este resultado con la llamada original
-            ))
+    if respuesta.tool_calls:
+        tool_messages = [
+            ToolMessage(content=str(mapa_herramientas[tc["name"]].invoke(tc["args"])), tool_call_id=tc["id"])
+            for tc in respuesta.tool_calls
+        ]
+        contenido = _generar(llm_tools, [*ctx, respuesta, *tool_messages], on_chunk)
+    else:
+        contenido = _generar(llm, ctx, on_chunk)
 
-        # Segunda llamada al LLM para generar el texto creado por las tools con el on_chunk
-        # Pasamos messages[] para que el narrador recuerde el texto generado por las tools
-        contenido_final = _generar(
-            llm_tools,
-            [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:],
-                HumanMessage(content=user_input), # Le pasamos el input del usuario
-                respuesta, # Las tools elegidas
-                *tool_messages # Los resultados generado por las tools
-            ],
-            on_chunk
-        )
-
-        # Almacenamos la información del input del usuario y el contenido final generado por las tools
-        messages.append(HumanMessage(content=user_input))
-        messages.append(AIMessage(content=contenido_final))
-        _truncar_ventana() # Mantenemos la ventana acotada; el diario (no resumen.txt) es ahora la memoria a largo plazo
-        _actualizar_diario(user_input, contenido_final) # El secretario extrae y persiste lo digno de recordar a largo plazo
-
-        return contenido_final # Devolvemos el texto de la narración final de las tools
-
-    else: # Si se confirma que el usuario no necesita tools para esta interacción, se continúa la historia
-        messages.append(HumanMessage(content=user_input)) # Almacenamos el input del usuario
-        contenido = _generar(llm, [messages[0], _diario_msg(), _beat_msg(), _stats_msg(), *messages[1:]], on_chunk) # Generamos el texto narrativo con diario + beat + ficha del jugador inyectados tras el prompt
-        messages.append(AIMessage(content=contenido)) # Almacenamos la respuesta de la IA en la ventana
-        _truncar_ventana() # Mantenemos la ventana acotada
-        _actualizar_diario(user_input, contenido) # El secretario extrae y persiste lo digno de recordar a largo plazo
-
-        return contenido # Devolvemos el contenido generado
+    messages.append(AIMessage(content=contenido))
+    _truncar_ventana()
+    _actualizar_diario(user_input, contenido)
+    return contenido
 
 
 def narrador_inicio(campaña: dict = None, on_chunk: Optional[Callable[[str], None]] = None): # Genera el inicio de la historia
